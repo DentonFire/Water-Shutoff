@@ -19,23 +19,28 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Initialize Firebase with safety check
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        let db, auth, currentUser;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY_HERE",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.firebasestorage.app",
+            messagingSenderId: "YOUR_MESSAGING_ID",
+            appId: "YOUR_APP_ID"
+        };
+        // ---------------------------------------
 
-        if (firebaseConfig) {
+        let db, auth, currentUser;
+        const appId = 'denton-fire-tools';
+
+        if (firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
 
             const initAuth = async () => {
                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
+                    await signInAnonymously(auth);
                 } catch (e) {
                     console.error("Auth Error:", e);
                 }
@@ -66,17 +71,12 @@
             // 1. Gather Data
             const address = document.getElementById('address').value;
             const dateTime = document.getElementById('datetime').value;
-            
             const systemTypeElement = document.querySelector('input[name="systemType"]:checked');
             const systemType = systemTypeElement ? systemTypeElement.value : null;
-            
             const gps = document.getElementById('gps-coords').value;
-            
             const damageElement = document.querySelector('input[name="damage"]:checked');
             const damage = damageElement ? damageElement.value : "No"; 
-            
             const notes = document.getElementById('notes').value;
-            
             const locStreet = document.getElementById('loc-street').value;
             const loc20 = document.getElementById('loc-20ft').value;
             const locBeyond = document.getElementById('loc-beyond').value;
@@ -128,7 +128,7 @@
 
             } catch (e) {
                 console.error("Submit Error:", e);
-                alert("Database error, trying email fallback.");
+                alert("Database error (" + e.message + "). Opening email fallback.");
                 try {
                     const fallbackData = {
                         address: address || "Unknown",
@@ -193,7 +193,7 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
             window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(cleanBody)}`;
         }
 
-        // --- GPS Logic with Reverse Geocoding ---
+        // --- GPS Logic ---
         function resetGPSBtn(btn) {
             btn.innerHTML = "<span>📍</span> Get My Location";
             btn.disabled = false;
@@ -218,28 +218,23 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                     const lon = position.coords.longitude;
                     const coords = `${lat},${lon}`;
                     
-                    // Update Coords UI
                     document.getElementById('gps-coords').value = coords;
                     document.getElementById('gps-status').classList.remove('hidden');
                     document.getElementById('gps-status').innerText = `✓ Location: ${coords}`;
                     
-                    // Reverse Geocoding: Coordinates -> Address
+                    // Reverse Geocode
                     const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`;
-                    
                     fetch(url)
                         .then(response => response.json())
                         .then(data => {
                             if (data.features && data.features.length > 0) {
                                 const p = data.features[0].properties;
-                                // Construct readable address
                                 const parts = [p.name, p.housenumber, p.street, p.city, p.state].filter(Boolean);
-                                // Remove duplicates (e.g. if name is same as street)
                                 const uniqueParts = [...new Set(parts)];
                                 const addressText = uniqueParts.join(', ');
                                 
                                 if (addressText) {
                                     document.getElementById('address').value = addressText;
-                                    // Visual flash to indicate update
                                     const addrField = document.getElementById('address');
                                     addrField.classList.add('bg-yellow-100');
                                     setTimeout(() => addrField.classList.remove('bg-yellow-100'), 1000);
@@ -248,7 +243,6 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                         })
                         .catch(err => console.warn("Reverse geocoding failed", err));
 
-                    // Reset Button
                     btn.innerHTML = "<span>📍</span> Update Location";
                     btn.disabled = false;
                     btn.classList.remove('opacity-50', 'cursor-not-allowed');
