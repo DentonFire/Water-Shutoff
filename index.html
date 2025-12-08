@@ -30,7 +30,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- FIREBASE CONFIGURATION ---
+        // --- YOUR REAL CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
             authDomain: "denton-fire-tools.firebaseapp.com",
@@ -39,10 +39,10 @@
             messagingSenderId: "751121603550",
             appId: "1:751121603550:web:3a8f25b990d45038ae1b4f"
         };
-        // ------------------------------
 
-        let db, auth;
-        // Consistent App ID for data path
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
         const appId = 'denton-fire-tools';
         let map;
         let allReports = []; 
@@ -51,27 +51,23 @@
         window.checkLogin = function() {
             const pass = document.getElementById('admin-pass').value;
             const errorMsg = document.getElementById('login-error');
+            const loginBtn = document.getElementById('login-btn');
             
             if (pass === "FDADMIN") {
-                // Correct Password
-                document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('dashboard-view').classList.remove('hidden');
+                // UI Updates
+                loginBtn.innerHTML = "Connecting...";
                 
-                // Initialize Firebase only after login
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                
-                const initAuth = async () => {
-                    try {
-                        await signInAnonymously(auth);
-                    } catch (error) {
-                        console.error("Auth Failed", error);
-                        alert("Database Connection Failed: " + error.message);
-                    }
-                };
-                initAuth();
+                // Sign in
+                signInAnonymously(auth).then(() => {
+                    document.getElementById('login-overlay').style.display = 'none';
+                    document.getElementById('dashboard-view').classList.remove('hidden');
+                }).catch((error) => {
+                    console.error("Auth Failed", error);
+                    loginBtn.innerHTML = "Login";
+                    alert("Database Connection Error: " + error.message + "\n\n(Did you enable Anonymous Auth in Firebase Console?)");
+                });
 
+                // Listen for Auth State
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         initMap();
@@ -85,7 +81,6 @@
             }
         }
 
-        // Allow Enter key to submit
         window.handleEnter = function(e) {
             if (e.key === 'Enter') window.checkLogin();
         }
@@ -105,9 +100,7 @@
             
             onSnapshot(q, (snapshot) => {
                 map.eachLayer((layer) => {
-                    if (layer instanceof L.Marker) {
-                        map.removeLayer(layer);
-                    }
+                    if (layer instanceof L.Marker) { map.removeLayer(layer); }
                 });
 
                 allReports = []; 
@@ -120,34 +113,16 @@
                         const [lat, lng] = d.gps.split(',').map(Number);
                         const isWater = d.systemType === 'Water Meter';
                         
-                        // --- PIN DIFFERENTIATION LOGIC ---
-                        const color = isWater ? '#2563eb' : '#dc2626'; // Blue vs Red
-                        const radius = isWater ? '50%' : '2px'; // Circle vs Rounded Square
+                        const color = isWater ? '#2563eb' : '#dc2626'; 
+                        const radius = isWater ? '50%' : '2px'; 
                         const label = isWater ? 'W' : 'S';
                         
                         const iconHtml = `
-                            <div style="
-                                background-color: ${color}; 
-                                width: 20px; 
-                                height: 20px; 
-                                border-radius: ${radius}; 
-                                border: 2px solid white; 
-                                box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                color: white;
-                                font-weight: bold;
-                                font-size: 10px;
-                                font-family: sans-serif;
-                            ">${label}</div>
+                            <div style="background-color: ${color}; width: 20px; height: 20px; border-radius: ${radius}; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px; font-family: sans-serif;">${label}</div>
                         `;
                         
                         const customIcon = L.divIcon({
-                            className: 'custom-div-icon',
-                            html: iconHtml,
-                            iconSize: [20, 20],
-                            iconAnchor: [10, 10]
+                            className: 'custom-div-icon', html: iconHtml, iconSize: [20, 20], iconAnchor: [10, 10]
                         });
 
                         const marker = L.marker([lat, lng], {icon: customIcon}).addTo(map);
@@ -174,26 +149,27 @@
         }
 
         window.exportToCSV = function() {
-            if (allReports.length === 0) {
-                alert("No data to export yet.");
-                return;
-            }
-
+            if (allReports.length === 0) { alert("No data to export yet."); return; }
             let csvContent = "data:text/csv;charset=utf-8,";
             csvContent += "System Type,Address,Date Time,Latitude,Longitude,Location Street,Location 20ft,Location Beyond 20ft,Damage,Notes\n";
 
             allReports.forEach(r => {
                 let lat = "", lng = "";
-                if (r.gps && r.gps.includes(',')) {
-                    [lat, lng] = r.gps.split(',');
-                }
+                if (r.gps && r.gps.includes(',')) { [lat, lng] = r.gps.split(','); }
                 const cleanAddr = `"${(r.address || '').replace(/"/g, '""')}"`;
                 const cleanNotes = `"${(r.notes || '').replace(/"/g, '""')}"`;
 
                 const row = [
-                    r.systemType, cleanAddr, r.dateTime, lat, lng,
-                    r.locStreet || 'N/A', r.loc20 || 'N/A', r.locBeyond || 'N/A',
-                    r.damage, cleanNotes
+                    r.systemType || 'Unknown',
+                    cleanAddr,
+                    r.dateTime || 'N/A',
+                    lat,
+                    lng,
+                    r.locStreet || 'N/A',
+                    r.loc20 || 'N/A',
+                    r.locBeyond || 'N/A',
+                    r.damage || 'N/A',
+                    cleanNotes
                 ].join(",");
                 csvContent += row + "\n";
             });
@@ -208,23 +184,9 @@
         }
     </script>
     <style>
-        .hero-bg {
-            background-color: #152a40;
-            background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
-        }
+        .hero-bg { background-color: #152a40; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'); }
         .leaflet-pane { z-index: 0 !important; }
-        
-        /* Login Screen Styles */
-        #login-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #152a40;
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
-        }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #152a40; z-index: 9999; display: flex; align-items: center; justify-content: center; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'); }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
@@ -235,22 +197,15 @@
             <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-20 mx-auto mb-6">
             <h2 class="text-2xl font-black text-navy mb-1 uppercase">Admin Access</h2>
             <p class="text-gray-500 text-sm mb-6">Denton Fire Dept. Internal Dashboard</p>
-            
             <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="Enter Password" class="w-full border-2 border-gray-300 rounded p-3 text-lg mb-4 focus:border-navy focus:outline-none text-center tracking-widest">
-            
             <p id="login-error" class="text-red font-bold text-sm mb-4 hidden">Incorrect Password</p>
-            
-            <button onclick="checkLogin()" class="w-full bg-navy text-white font-bold py-3 rounded hover:bg-gray-800 transition">
-                Login
-            </button>
+            <button id="login-btn" onclick="checkLogin()" class="w-full bg-navy text-white font-bold py-3 rounded hover:bg-gray-800 transition">Login</button>
             <p class="mt-6 text-xs text-gray-400">Authorized Personnel Only</p>
         </div>
     </div>
 
-    <!-- MAIN DASHBOARD (Hidden until login) -->
+    <!-- MAIN DASHBOARD -->
     <div id="dashboard-view" class="hidden flex flex-col h-full">
-        
-        <!-- Hero Section -->
         <div class="hero-bg text-white py-6 px-4 text-center shrink-0 shadow-lg relative z-20">
             <div class="flex items-center justify-center gap-4">
                 <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-12 drop-shadow-lg">
@@ -261,39 +216,23 @@
             </div>
         </div>
 
-        <!-- Action Toolbar -->
         <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0 relative">
             <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
-                
                 <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <a href="water_shutoff.html" class="flex-1 sm:flex-none bg-navy text-white text-sm font-bold py-2 px-4 rounded hover:bg-gray-800 transition shadow-sm text-center flex items-center gap-2">
-                        <span>+</span> New Submission
-                    </a>
+                    <a href="water_shutoff.html" class="flex-1 sm:flex-none bg-navy text-white text-sm font-bold py-2 px-4 rounded hover:bg-gray-800 transition shadow-sm text-center flex items-center gap-2"><span>+</span> New Submission</a>
                 </div>
-
                 <div class="flex gap-6 text-xs font-bold text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
-                    <div class="flex items-center gap-2">
-                        <div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div>
-                        Water Meter
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div>
-                        Sprinkler
-                    </div>
+                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div> Water Meter</div>
+                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div> Sprinkler</div>
                 </div>
-
                 <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
                     <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">Connecting...</span>
-                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded transition shadow-sm flex items-center gap-1">
-                        <span>📄</span> CSV
-                    </button>
+                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded transition shadow-sm flex items-center gap-1"><span>📄</span> CSV</button>
                 </div>
             </div>
         </div>
 
-        <!-- Full Screen Map -->
         <div id="map" class="flex-grow w-full z-0 bg-gray-200 relative"></div>
     </div>
-
 </body>
 </html>
