@@ -30,18 +30,19 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        // --- FIREBASE CONFIGURATION ---
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY_HERE",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT.firebasestorage.app",
-            messagingSenderId: "YOUR_MESSAGING_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
+            authDomain: "denton-fire-tools.firebaseapp.com",
+            projectId: "denton-fire-tools",
+            storageBucket: "denton-fire-tools.firebasestorage.app",
+            messagingSenderId: "751121603550",
+            appId: "1:751121603550:web:3a8f25b990d45038ae1b4f"
         };
-        // ---------------------------------------
+        // ------------------------------
 
         let db, auth;
+        // Consistent App ID for data path
         const appId = 'denton-fire-tools';
         let map;
         let allReports = []; 
@@ -57,29 +58,26 @@
                 document.getElementById('dashboard-view').classList.remove('hidden');
                 
                 // Initialize Firebase only after login
-                if (firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
-                    const app = initializeApp(firebaseConfig);
-                    auth = getAuth(app);
-                    db = getFirestore(app);
-                    
-                    const initAuth = async () => {
-                        try {
-                            await signInAnonymously(auth);
-                        } catch (error) {
-                            console.error("Auth Failed", error);
-                        }
-                    };
-                    initAuth();
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                const initAuth = async () => {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Auth Failed", error);
+                        alert("Database Connection Failed: " + error.message);
+                    }
+                };
+                initAuth();
 
-                    onAuthStateChanged(auth, (user) => {
-                        if (user) {
-                            initMap();
-                            listenToData();
-                        }
-                    });
-                } else {
-                    alert("Firebase Config Missing in code!");
-                }
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        initMap();
+                        listenToData();
+                    }
+                });
             } else {
                 // Incorrect
                 errorMsg.classList.remove('hidden');
@@ -123,8 +121,6 @@
                         const isWater = d.systemType === 'Water Meter';
                         
                         // --- PIN DIFFERENTIATION LOGIC ---
-                        // Water Meter: Blue Circle
-                        // Sprinkler: Red Square (visually distinct shape & color)
                         const color = isWater ? '#2563eb' : '#dc2626'; // Blue vs Red
                         const radius = isWater ? '50%' : '2px'; // Circle vs Rounded Square
                         const label = isWater ? 'W' : 'S';
