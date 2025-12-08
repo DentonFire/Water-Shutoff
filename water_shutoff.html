@@ -19,7 +19,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- FIREBASE CONFIGURATION ---
+        // --- YOUR REAL CONFIGURATION (Pre-Filled) ---
         const firebaseConfig = {
             apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
             authDomain: "denton-fire-tools.firebaseapp.com",
@@ -28,7 +28,6 @@
             messagingSenderId: "751121603550",
             appId: "1:751121603550:web:3a8f25b990d45038ae1b4f"
         };
-        // ------------------------------
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -42,7 +41,7 @@
                 await signInAnonymously(auth);
             } catch (e) {
                 console.error("Auth Error:", e);
-                alert("Database Connection Error: " + e.message);
+                // Fail silently on load so we don't annoy users
             }
         };
         initAuth();
@@ -105,16 +104,15 @@
             try {
                 const reportData = {
                     address, dateTime, systemType, gps, damage, notes, 
-                    // Only save location data if it's a water meter
-                    locStreet: systemType === 'Water Meter' ? locStreet : null,
-                    loc20: systemType === 'Water Meter' ? loc20 : null,
-                    locBeyond: systemType === 'Water Meter' ? locBeyond : null,
+                    // Explicitly save "N/A" string if not Water Meter (Fixes empty CSV cells)
+                    locStreet: systemType === 'Water Meter' ? locStreet : "N/A",
+                    loc20: systemType === 'Water Meter' ? loc20 : "N/A",
+                    locBeyond: systemType === 'Water Meter' ? locBeyond : "N/A",
                     timestamp: serverTimestamp(),
                     userId: currentUser ? currentUser.uid : 'anonymous'
                 };
 
                 if (db && currentUser) {
-                    // Save to strictly consistent path
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'), reportData);
                 } else {
                     console.warn("DB not connected, skipping save.");
@@ -142,7 +140,7 @@
                         dateTime: dateTime || "Unknown",
                         damage: damage || "No",
                         notes: notes || "",
-                        locStreet: locStreet, loc20: loc20, locBeyond: locBeyond
+                        locStreet: locStreet || "N/A", loc20: loc20 || "N/A", locBeyond: locBeyond || "N/A"
                     };
                     generateEmail(fallbackData);
                 } catch (err) { console.error("Fallback failed", err); }
@@ -228,7 +226,7 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                     document.getElementById('gps-status').classList.remove('hidden');
                     document.getElementById('gps-status').innerText = `✓ Location: ${coords}`;
                     
-                    // Reverse Geocode (Coordinates -> Address)
+                    // Reverse Geocode
                     const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`;
                     fetch(url)
                         .then(response => response.json())
