@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Water Shutoff Tracker</title>
+    <title>Admin Dashboard - Water Shutoff</title>
     
     <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
     
@@ -30,37 +30,70 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Initialize Firebase
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY_HERE",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.firebasestorage.app",
+            messagingSenderId: "YOUR_MESSAGING_ID",
+            appId: "YOUR_APP_ID"
+        };
+        // ---------------------------------------
+
         let db, auth;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-        if (firebaseConfig) {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-
-            const initAuth = async () => {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            };
-            initAuth();
-
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    initMap();
-                    listenToData();
-                }
-            });
-        }
-
+        const appId = 'denton-fire-tools';
         let map;
         let allReports = []; 
 
+        // LOGIN FUNCTION
+        window.checkLogin = function() {
+            const pass = document.getElementById('admin-pass').value;
+            const errorMsg = document.getElementById('login-error');
+            
+            if (pass === "FDADMIN") {
+                // Correct Password
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                
+                // Initialize Firebase only after login
+                if (firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+                    
+                    const initAuth = async () => {
+                        try {
+                            await signInAnonymously(auth);
+                        } catch (error) {
+                            console.error("Auth Failed", error);
+                        }
+                    };
+                    initAuth();
+
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            initMap();
+                            listenToData();
+                        }
+                    });
+                } else {
+                    alert("Firebase Config Missing in code!");
+                }
+            } else {
+                // Incorrect
+                errorMsg.classList.remove('hidden');
+                document.getElementById('admin-pass').value = '';
+            }
+        }
+
+        // Allow Enter key to submit
+        window.handleEnter = function(e) {
+            if (e.key === 'Enter') window.checkLogin();
+        }
+
         function initMap() {
+            if (map) return;
             // Centered on Denton
             map = L.map('map').setView([33.2148, -97.1331], 13);
             
@@ -88,39 +121,62 @@
                     if (d.gps && d.gps.includes(',')) {
                         const [lat, lng] = d.gps.split(',').map(Number);
                         const isWater = d.systemType === 'Water Meter';
-                        const color = isWater ? 'blue' : 'red';
                         
-                        // Simple SVG Icons
+                        // --- PIN DIFFERENTIATION LOGIC ---
+                        // Water Meter: Blue Circle
+                        // Sprinkler: Red Square (visually distinct shape & color)
+                        const color = isWater ? '#2563eb' : '#dc2626'; // Blue vs Red
+                        const radius = isWater ? '50%' : '2px'; // Circle vs Rounded Square
+                        const label = isWater ? 'W' : 'S';
+                        
                         const iconHtml = `
-                            <div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>
+                            <div style="
+                                background-color: ${color}; 
+                                width: 20px; 
+                                height: 20px; 
+                                border-radius: ${radius}; 
+                                border: 2px solid white; 
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-weight: bold;
+                                font-size: 10px;
+                                font-family: sans-serif;
+                            ">${label}</div>
                         `;
                         
                         const customIcon = L.divIcon({
                             className: 'custom-div-icon',
                             html: iconHtml,
-                            iconSize: [14, 14],
-                            iconAnchor: [7, 7]
+                            iconSize: [20, 20],
+                            iconAnchor: [10, 10]
                         });
 
                         const marker = L.marker([lat, lng], {icon: customIcon}).addTo(map);
                         
                         const popupContent = `
-                            <div class="text-sm">
-                                <strong class="text-${color === 'blue' ? 'navy' : 'red'} uppercase">${d.systemType}</strong><br>
-                                <span class="text-gray-600">${d.address}</span><br>
-                                <span class="text-xs text-gray-400">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</span><br>
-                                ${d.damage === 'Yes' ? '<span class="text-red font-bold">⚠️ DAMAGED</span>' : ''}
+                            <div class="text-sm p-1">
+                                <strong class="text-${isWater ? 'blue-600' : 'red-600'} uppercase font-black">
+                                    ${isWater ? '💧 Water Meter' : '🧯 Sprinkler System'}
+                                </strong><br>
+                                <span class="text-gray-800 font-bold block mt-1">${d.address}</span>
+                                <span class="text-xs text-gray-500 block mb-1">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</span>
+                                ${d.damage === 'Yes' ? '<span class="bg-red text-white text-xs px-1 rounded font-bold">⚠️ DAMAGED</span>' : ''}
+                                ${d.notes ? `<p class="text-gray-600 text-xs mt-1 border-t pt-1 italic">"${d.notes}"</p>` : ''}
                             </div>
                         `;
                         marker.bindPopup(popupContent);
                     }
                 });
                 
-                document.getElementById('count').innerText = `${allReports.length} Reports Logged`;
+                document.getElementById('count').innerText = `${allReports.length} Reports`;
+            }, (error) => {
+                console.error("DB Error:", error);
             });
         }
 
-        // Export to CSV Function
         window.exportToCSV = function() {
             if (allReports.length === 0) {
                 alert("No data to export yet.");
@@ -135,21 +191,13 @@
                 if (r.gps && r.gps.includes(',')) {
                     [lat, lng] = r.gps.split(',');
                 }
-                
                 const cleanAddr = `"${(r.address || '').replace(/"/g, '""')}"`;
                 const cleanNotes = `"${(r.notes || '').replace(/"/g, '""')}"`;
 
                 const row = [
-                    r.systemType,
-                    cleanAddr,
-                    r.dateTime,
-                    lat,
-                    lng,
-                    r.locStreet || 'N/A',
-                    r.loc20 || 'N/A',
-                    r.locBeyond || 'N/A',
-                    r.damage,
-                    cleanNotes
+                    r.systemType, cleanAddr, r.dateTime, lat, lng,
+                    r.locStreet || 'N/A', r.loc20 || 'N/A', r.locBeyond || 'N/A',
+                    r.damage, cleanNotes
                 ].join(",");
                 csvContent += row + "\n";
             });
@@ -168,52 +216,87 @@
             background-color: #152a40;
             background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
         }
+        .leaflet-pane { z-index: 0 !important; }
+        
+        /* Login Screen Styles */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #152a40;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
+        }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col">
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
 
-    <!-- Hero Section (Matches Index) -->
-    <div class="hero-bg text-white py-8 px-4 text-center shrink-0">
-        <div class="flex items-center justify-center gap-4 mb-2">
-            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-16 drop-shadow-lg">
-            <div class="text-left">
-                <h1 class="text-2xl font-black uppercase tracking-wide leading-none">Water Shutoff</h1>
-                <p class="text-yellow text-sm font-medium">Internal Live Dashboard</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Action Toolbar -->
-    <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0">
-        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+    <!-- LOGIN SCREEN -->
+    <div id="login-overlay">
+        <div class="bg-white p-8 rounded-lg shadow-2xl max-w-md w-full text-center mx-4">
+            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-20 mx-auto mb-6">
+            <h2 class="text-2xl font-black text-navy mb-1 uppercase">Admin Access</h2>
+            <p class="text-gray-500 text-sm mb-6">Denton Fire Dept. Internal Dashboard</p>
             
-            <!-- Left: Navigation -->
-            <div class="flex items-center gap-2 w-full sm:w-auto">
-                <a href="index.html" class="text-gray-500 hover:text-navy px-2 text-xl" title="Home">⌂</a>
-                <a href="water_shutoff.html" class="flex-1 sm:flex-none bg-navy text-white text-sm font-bold py-2 px-4 rounded hover:bg-gray-800 transition shadow-sm text-center">
-                    + New Submission
-                </a>
-            </div>
-
-            <!-- Center: Legend -->
-            <div class="flex gap-4 text-xs font-bold text-gray-600">
-                <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-blue-600 border border-white shadow-sm"></div> Water Meter</div>
-                <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-red-600 border border-white shadow-sm"></div> Sprinkler</div>
-            </div>
-
-            <!-- Right: Actions/Stats -->
-            <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
-                <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">Loading...</span>
-                <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded transition shadow-sm flex items-center gap-1">
-                    <span>📄</span> Export CSV
-                </button>
-            </div>
+            <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="Enter Password" class="w-full border-2 border-gray-300 rounded p-3 text-lg mb-4 focus:border-navy focus:outline-none text-center tracking-widest">
+            
+            <p id="login-error" class="text-red font-bold text-sm mb-4 hidden">Incorrect Password</p>
+            
+            <button onclick="checkLogin()" class="w-full bg-navy text-white font-bold py-3 rounded hover:bg-gray-800 transition">
+                Login
+            </button>
+            <p class="mt-6 text-xs text-gray-400">Authorized Personnel Only</p>
         </div>
     </div>
 
-    <!-- Full Screen Map -->
-    <div id="map" class="flex-grow w-full z-0 bg-gray-200 relative">
-        <!-- Map loads here -->
+    <!-- MAIN DASHBOARD (Hidden until login) -->
+    <div id="dashboard-view" class="hidden flex flex-col h-full">
+        
+        <!-- Hero Section -->
+        <div class="hero-bg text-white py-6 px-4 text-center shrink-0 shadow-lg relative z-20">
+            <div class="flex items-center justify-center gap-4">
+                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-12 drop-shadow-lg">
+                <div class="text-left">
+                    <h1 class="text-xl font-black uppercase tracking-wide leading-none">Water Shutoff</h1>
+                    <p class="text-yellow text-xs font-bold tracking-widest">COMMAND DASHBOARD</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Toolbar -->
+        <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0 relative">
+            <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+                
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <a href="water_shutoff.html" class="flex-1 sm:flex-none bg-navy text-white text-sm font-bold py-2 px-4 rounded hover:bg-gray-800 transition shadow-sm text-center flex items-center gap-2">
+                        <span>+</span> New Submission
+                    </a>
+                </div>
+
+                <div class="flex gap-6 text-xs font-bold text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div>
+                        Water Meter
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div>
+                        Sprinkler
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                    <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">Connecting...</span>
+                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded transition shadow-sm flex items-center gap-1">
+                        <span>📄</span> CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full Screen Map -->
+        <div id="map" class="flex-grow w-full z-0 bg-gray-200 relative"></div>
     </div>
 
 </body>
