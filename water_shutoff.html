@@ -19,38 +19,38 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        // --- FIREBASE CONFIGURATION ---
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY_HERE",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT.firebasestorage.app",
-            messagingSenderId: "YOUR_MESSAGING_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
+            authDomain: "denton-fire-tools.firebaseapp.com",
+            projectId: "denton-fire-tools",
+            storageBucket: "denton-fire-tools.firebasestorage.app",
+            messagingSenderId: "751121603550",
+            appId: "1:751121603550:web:3a8f25b990d45038ae1b4f"
         };
-        // ---------------------------------------
+        // ------------------------------
 
-        let db, auth, currentUser;
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Consistent App ID
         const appId = 'denton-fire-tools';
 
-        if (firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
+        const initAuth = async () => {
+            try {
+                await signInAnonymously(auth);
+            } catch (e) {
+                console.error("Auth Error:", e);
+                alert("Database Connection Error: " + e.message);
+            }
+        };
+        initAuth();
 
-            const initAuth = async () => {
-                try {
-                    await signInAnonymously(auth);
-                } catch (e) {
-                    console.error("Auth Error:", e);
-                }
-            };
-            initAuth();
-
-            onAuthStateChanged(auth, (user) => { 
-                currentUser = user; 
-            });
-        }
+        let currentUser = null;
+        onAuthStateChanged(auth, (user) => { 
+            currentUser = user; 
+        });
 
         // Auto-fill Date/Time on Load
         window.addEventListener('DOMContentLoaded', () => {
@@ -74,9 +74,11 @@
             const systemTypeElement = document.querySelector('input[name="systemType"]:checked');
             const systemType = systemTypeElement ? systemTypeElement.value : null;
             const gps = document.getElementById('gps-coords').value;
+            
             const damageElement = document.querySelector('input[name="damage"]:checked');
             const damage = damageElement ? damageElement.value : "No"; 
             const notes = document.getElementById('notes').value;
+            
             const locStreet = document.getElementById('loc-street').value;
             const loc20 = document.getElementById('loc-20ft').value;
             const locBeyond = document.getElementById('loc-beyond').value;
@@ -103,6 +105,7 @@
             try {
                 const reportData = {
                     address, dateTime, systemType, gps, damage, notes, 
+                    // Only save location data if it's a water meter
                     locStreet: systemType === 'Water Meter' ? locStreet : null,
                     loc20: systemType === 'Water Meter' ? loc20 : null,
                     locBeyond: systemType === 'Water Meter' ? locBeyond : null,
@@ -111,7 +114,10 @@
                 };
 
                 if (db && currentUser) {
+                    // Save to strictly consistent path
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'), reportData);
+                } else {
+                    console.warn("DB not connected, skipping save.");
                 }
                 
                 alert("✅ Report logged! Opening email client...");
@@ -222,7 +228,7 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                     document.getElementById('gps-status').classList.remove('hidden');
                     document.getElementById('gps-status').innerText = `✓ Location: ${coords}`;
                     
-                    // Reverse Geocode
+                    // Reverse Geocode (Coordinates -> Address)
                     const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`;
                     fetch(url)
                         .then(response => response.json())
