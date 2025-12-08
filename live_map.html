@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Water Shutoff Tracker</title>
+    
+    <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
+    
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { navy: '#152a40', red: '#bf2726', yellow: '#f9c031' },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Initialize Firebase
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        let db, auth;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        if (firebaseConfig) {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            const initAuth = async () => {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            };
+            initAuth();
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    initMap();
+                    listenToData();
+                }
+            });
+        }
+
+        let map;
+        let allReports = []; 
+
+        function initMap() {
+            // Centered on Denton
+            map = L.map('map').setView([33.2148, -97.1331], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        function listenToData() {
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
+            
+            onSnapshot(q, (snapshot) => {
+                map.eachLayer((layer) => {
+                    if (layer instanceof L.Marker) {
+                        map.removeLayer(layer);
+                    }
+                });
+
+                allReports = []; 
+
+                snapshot.forEach((doc) => {
+                    const d = doc.data();
+                    allReports.push(d);
+
+                    if (d.gps && d.gps.includes(',')) {
+                        const [lat, lng] = d.gps.split(',').map(Number);
+                        const isWater = d.systemType === 'Water Meter';
+                        const color = isWater ? 'blue' : 'red';
+                        
+                        // Simple SVG Icons
+                        const iconHtml = `
+                            <div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>
+                        `;
+                        
+                        const customIcon = L.divIcon({
+                            className: 'custom-div-icon',
+                            html: iconHtml,
+                            iconSize: [14, 14],
+                            iconAnchor: [7, 7]
+                        });
+
+                        const marker = L.marker([lat, lng], {icon: customIcon}).addTo(map);
+                        
+                        const popupContent = `
+                            <div class="text-sm">
+                                <strong class="text-${color === 'blue' ? 'navy' : 'red'} uppercase">${d.systemType}</strong><br>
+                                <span class="text-gray-600">${d.address}</span><br>
+                                <span class="text-xs text-gray-400">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</span><br>
+                                ${d.damage === 'Yes' ? '<span class="text-red font-bold">⚠️ DAMAGED</span>' : ''}
+                            </div>
+                        `;
+                        marker.bindPopup(popupContent);
+                    }
+                });
+                
+                document.getElementById('count').innerText = `${allReports.length} Reports Logged`;
+            });
+        }
+
+        // Export to CSV Function
+        window.exportToCSV = function() {
+            if (allReports.length === 0) {
+                alert("No data to export yet.");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "System Type,Address,Date Time,Latitude,Longitude,Location Street,Location 20ft,Location Beyond 20ft,Damage,Notes\n";
+
+            allReports.forEach(r => {
+                let lat = "", lng = "";
+                if (r.gps && r.gps.includes(',')) {
+                    [lat, lng] = r.gps.split(',');
+                }
+                
+                const cleanAddr = `"${(r.address || '').replace(/"/g, '""')}"`;
+                const cleanNotes = `"${(r.notes || '').replace(/"/g, '""')}"`;
+
+                const row = [
+                    r.systemType,
+                    cleanAddr,
+                    r.dateTime,
+                    lat,
+                    lng,
+                    r.locStreet || 'N/A',
+                    r.loc20 || 'N/A',
+                    r.locBeyond || 'N/A',
+                    r.damage,
+                    cleanNotes
+                ].join(",");
+                csvContent += row + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "denton_fire_shutoff_data.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+    <style>
+        .hero-bg {
+            background-color: #152a40;
+            background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col">
+
+    <!-- Hero Section (Matches Index) -->
+    <div class="hero-bg text-white py-8 px-4 text-center shrink-0">
+        <div class="flex items-center justify-center gap-4 mb-2">
+            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-16 drop-shadow-lg">
+            <div class="text-left">
+                <h1 class="text-2xl font-black uppercase tracking-wide leading-none">Water Shutoff</h1>
+                <p class="text-yellow text-sm font-medium">Internal Live Dashboard</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Toolbar -->
+    <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+            
+            <!-- Left: Navigation -->
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <a href="index.html" class="text-gray-500 hover:text-navy px-2 text-xl" title="Home">⌂</a>
+                <a href="water_shutoff.html" class="flex-1 sm:flex-none bg-navy text-white text-sm font-bold py-2 px-4 rounded hover:bg-gray-800 transition shadow-sm text-center">
+                    + New Submission
+                </a>
+            </div>
+
+            <!-- Center: Legend -->
+            <div class="flex gap-4 text-xs font-bold text-gray-600">
+                <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-blue-600 border border-white shadow-sm"></div> Water Meter</div>
+                <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-red-600 border border-white shadow-sm"></div> Sprinkler</div>
+            </div>
+
+            <!-- Right: Actions/Stats -->
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">Loading...</span>
+                <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded transition shadow-sm flex items-center gap-1">
+                    <span>📄</span> Export CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Screen Map -->
+    <div id="map" class="flex-grow w-full z-0 bg-gray-200 relative">
+        <!-- Map loads here -->
+    </div>
+
+</body>
+</html>
