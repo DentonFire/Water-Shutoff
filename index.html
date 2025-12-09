@@ -8,8 +8,8 @@
     <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
     
     <!-- Leaflet Map -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -27,7 +27,7 @@
     <!-- Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- YOUR REAL CONFIGURATION ---
@@ -47,49 +47,78 @@
         let map;
         let allReports = []; 
 
-        // LOGIN FUNCTION
+        // --- AUTH & SESSION LOGIC ---
+        
+        // 1. Check for existing session on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const session = localStorage.getItem('denton_admin_session');
+            if (session === 'active') {
+                // Skip login screen
+                showDashboard();
+                connectFirebase();
+            }
+        });
+
+        // 2. Handle Login Button
         window.checkLogin = function() {
             const pass = document.getElementById('admin-pass').value;
             const errorMsg = document.getElementById('login-error');
             const loginBtn = document.getElementById('login-btn');
             
             if (pass === "FDADMIN") {
-                // UI Updates
                 loginBtn.innerHTML = "Connecting...";
                 
-                // Sign in
-                signInAnonymously(auth).then(() => {
-                    document.getElementById('login-overlay').style.display = 'none';
-                    document.getElementById('dashboard-view').classList.remove('hidden');
-                }).catch((error) => {
-                    console.error("Auth Failed", error);
-                    loginBtn.innerHTML = "Login";
-                    alert("Database Connection Error: " + error.message + "\n\n(Did you enable Anonymous Auth in Firebase Console?)");
-                });
-
-                // Listen for Auth State
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        initMap();
-                        listenToData();
-                    }
-                });
+                // Set Session Flag
+                localStorage.setItem('denton_admin_session', 'active');
+                
+                showDashboard();
+                connectFirebase();
             } else {
-                // Incorrect
                 errorMsg.classList.remove('hidden');
                 document.getElementById('admin-pass').value = '';
             }
         }
 
-        window.handleEnter = function(e) {
-            if (e.key === 'Enter') window.checkLogin();
+        // 3. Handle Logout
+        window.performLogout = function() {
+            localStorage.removeItem('denton_admin_session');
+            signOut(auth).then(() => {
+                location.reload(); // Refresh to show login screen
+            });
         }
 
+        window.handleEnter = function(e) { if (e.key === 'Enter') window.checkLogin(); }
+
+        // --- HELPERS ---
+
+        function showDashboard() {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('dashboard-view').classList.remove('hidden');
+            setTimeout(() => { if (map) map.invalidateSize(); }, 200);
+        }
+
+        function connectFirebase() {
+            signInAnonymously(auth).catch((error) => {
+                console.error("Auth Failed", error);
+                alert("Database Connection Failed: " + error.message);
+            });
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    initMap();
+                    listenToData();
+                }
+            });
+        }
+
+        // --- MAP & DATA LOGIC ---
+
         function initMap() {
-            if (map) return;
-            // Centered on Denton
+            if (map) {
+                setTimeout(() => map.invalidateSize(), 100);
+                return;
+            }
             map = L.map('map').setView([33.2148, -97.1331], 13);
-            
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(map);
@@ -118,7 +147,21 @@
                         const label = isWater ? 'W' : 'S';
                         
                         const iconHtml = `
-                            <div style="background-color: ${color}; width: 20px; height: 20px; border-radius: ${radius}; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px; font-family: sans-serif;">${label}</div>
+                            <div style="
+                                background-color: ${color}; 
+                                width: 20px; 
+                                height: 20px; 
+                                border-radius: ${radius}; 
+                                border: 2px solid white; 
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-weight: bold;
+                                font-size: 10px;
+                                font-family: sans-serif;
+                            ">${label}</div>
                         `;
                         
                         const customIcon = L.divIcon({
@@ -149,35 +192,17 @@
         }
 
         window.exportToCSV = function() {
-            if (allReports.length === 0) { alert("No data to export yet."); return; }
-            let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "System Type,Address,Date Time,Latitude,Longitude,Location Street,Location 20ft,Location Beyond 20ft,Damage,Notes\n";
-
+            if (allReports.length === 0) { alert("No data."); return; }
+            let csvContent = "data:text/csv;charset=utf-8,Type,Address,Date,Lat,Lon,Street,20ft,Beyond,Damage,Notes\n";
             allReports.forEach(r => {
-                let lat = "", lng = "";
-                if (r.gps && r.gps.includes(',')) { [lat, lng] = r.gps.split(','); }
-                const cleanAddr = `"${(r.address || '').replace(/"/g, '""')}"`;
-                const cleanNotes = `"${(r.notes || '').replace(/"/g, '""')}"`;
-
-                const row = [
-                    r.systemType || 'Unknown',
-                    cleanAddr,
-                    r.dateTime || 'N/A',
-                    lat,
-                    lng,
-                    r.locStreet || 'N/A',
-                    r.loc20 || 'N/A',
-                    r.locBeyond || 'N/A',
-                    r.damage || 'N/A',
-                    cleanNotes
-                ].join(",");
-                csvContent += row + "\n";
+                let lat = "N/A", lng = "N/A";
+                if (r.gps && r.gps.includes(',')) [lat, lng] = r.gps.split(',');
+                const clean = (val) => `"${(val || 'N/A').toString().replace(/"/g, '""')}"`;
+                csvContent += `${clean(r.systemType)},${clean(r.address)},${clean(r.dateTime)},${lat},${lng},${clean(r.locStreet)},${clean(r.loc20)},${clean(r.locBeyond)},${clean(r.damage)},${clean(r.notes)}\n`;
             });
-
-            const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "denton_fire_shutoff_data.csv");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", "denton_data.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -206,6 +231,8 @@
 
     <!-- MAIN DASHBOARD -->
     <div id="dashboard-view" class="hidden flex flex-col h-full">
+        
+        <!-- Hero Section -->
         <div class="hero-bg text-white py-6 px-4 text-center shrink-0 shadow-lg relative z-20">
             <div class="flex items-center justify-center gap-4">
                 <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-12 drop-shadow-lg">
@@ -216,23 +243,45 @@
             </div>
         </div>
 
+        <!-- Action Toolbar -->
         <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0 relative">
             <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+                
                 <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <a href="water_shutoff.html" class="flex-1 sm:flex-none bg-navy text-white text-sm font-bold py-2 px-4 rounded hover:bg-gray-800 transition shadow-sm text-center flex items-center gap-2"><span>+</span> New Submission</a>
+                    <a href="water_shutoff.html" class="flex-1 sm:flex-none bg-navy text-white text-sm font-bold py-2 px-4 rounded hover:bg-gray-800 transition shadow-sm text-center flex items-center gap-2">
+                        <span>+</span> New Submission
+                    </a>
                 </div>
+
                 <div class="flex gap-6 text-xs font-bold text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
-                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div> Water Meter</div>
-                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div> Sprinkler</div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div>
+                        Water Meter
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div>
+                        Sprinkler
+                    </div>
                 </div>
+
                 <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
                     <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">Connecting...</span>
-                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded transition shadow-sm flex items-center gap-1"><span>📄</span> CSV</button>
+                    
+                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded transition shadow-sm flex items-center gap-1">
+                        <span>📄</span> CSV
+                    </button>
+                    
+                    <!-- NEW LOGOUT BUTTON -->
+                    <button onclick="performLogout()" class="text-gray-400 hover:text-red-500 text-xs font-bold px-2 py-2 rounded transition" title="Logout">
+                        LOGOUT
+                    </button>
                 </div>
             </div>
         </div>
 
+        <!-- Full Screen Map -->
         <div id="map" class="flex-grow w-full z-0 bg-gray-200 relative"></div>
     </div>
+
 </body>
 </html>
