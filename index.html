@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Water Shutoff</title>
+    
     <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
-
-    <!-- Leaflet -->
+    
+    <!-- Leaflet Map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
@@ -23,20 +24,13 @@
         }
     </script>
 
-    <!-- Firebase v9+ Modular -->
+    <!-- Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            collection, 
-            query, 
-            orderBy, 
-            onSnapshot, 
-            getDocs, 
-            writeBatch 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- YOUR REAL CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
             authDomain: "denton-fire-tools.firebaseapp.com",
@@ -50,13 +44,13 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = 'denton-fire-tools';
-
         let map;
-        let allReports = [];
+        let allReports = []; 
 
-        // ==================== AUTH & SESSION ====================
+        // --- AUTH & SESSION LOGIC ---
         window.addEventListener('DOMContentLoaded', () => {
-            if (localStorage.getItem('denton_admin_session') === 'active') {
+            const session = localStorage.getItem('denton_admin_session');
+            if (session === 'active') {
                 showDashboard();
                 connectFirebase();
             }
@@ -64,36 +58,43 @@
 
         window.checkLogin = function() {
             const pass = document.getElementById('admin-pass').value;
+            const errorMsg = document.getElementById('login-error');
+            const loginBtn = document.getElementById('login-btn');
+            
             if (pass === "FDADMIN") {
+                loginBtn.innerHTML = "Connecting...";
                 localStorage.setItem('denton_admin_session', 'active');
                 showDashboard();
                 connectFirebase();
             } else {
-                document.getElementById('login-error').classList.remove('hidden');
+                errorMsg.classList.remove('hidden');
                 document.getElementById('admin-pass').value = '';
             }
-        };
+        }
 
         window.performLogout = function() {
             localStorage.removeItem('denton_admin_session');
-            signOut(auth).then(() => location.reload());
-        };
+            signOut(auth).then(() => {
+                location.reload(); 
+            });
+        }
 
-        window.handleEnter = (e) => { if (e.key === 'Enter') checkLogin(); };
+        window.handleEnter = function(e) { if (e.key === 'Enter') window.checkLogin(); }
 
+        // --- HELPERS ---
         function showDashboard() {
             document.getElementById('login-overlay').style.display = 'none';
             document.getElementById('dashboard-view').classList.remove('hidden');
-            setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+            setTimeout(() => { if (map) map.invalidateSize(); }, 200);
         }
 
         function connectFirebase() {
-            signInAnonymously(auth).catch(err => {
-                console.error("Auth error:", err);
-                alert("Connection failed: " + err.message);
+            signInAnonymously(auth).catch((error) => {
+                console.error("Auth Failed", error);
+                alert("Database Connection Failed: " + error.message);
             });
 
-            onAuthStateChanged(auth, user => {
+            onAuthStateChanged(auth, (user) => {
                 if (user) {
                     initMap();
                     listenToData();
@@ -101,195 +102,168 @@
             });
         }
 
-        // ==================== MAP ====================
+        // --- MAP & DATA LOGIC ---
         function initMap() {
-            if (map) { map.invalidateSize(); return; }
+            if (map) {
+                setTimeout(() => map.invalidateSize(), 100);
+                return;
+            }
             map = L.map('map').setView([33.2148, -97.1331], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
+                attribution: '&copy; OpenStreetMap contributors'
             }).addTo(map);
         }
 
-        // ==================== DATA LISTENER (CORRECT PATH) ====================
         function listenToData() {
-            const q = query(
-                collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'),
-                orderBy('dateTime', 'desc')
-            );
-
-            document.getElementById('count').innerText = 'Loading reports...';
-
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
+            
             onSnapshot(q, (snapshot) => {
-                map.eachLayer(l => { if (l instanceof L.Marker) map.removeLayer(l); });
-                allReports = [];
+                map.eachLayer((layer) => {
+                    if (layer instanceof L.Marker) { map.removeLayer(layer); }
+                });
 
-                snapshot.forEach(doc => {
+                allReports = []; 
+
+                snapshot.forEach((doc) => {
                     const d = doc.data();
                     allReports.push(d);
 
                     if (d.gps && d.gps.includes(',')) {
                         const [lat, lng] = d.gps.split(',').map(Number);
-                        if (isNaN(lat) || isNaN(lng)) return;
-
                         const isWater = d.systemType === 'Water Meter';
-                        const color = isWater ? '#2563eb' : '#dc2626';
-                        const radius = isWater ? '50%' : '2px';
+                        
+                        const color = isWater ? '#2563eb' : '#dc2626'; 
+                        const radius = isWater ? '50%' : '2px'; 
                         const label = isWater ? 'W' : 'S';
-
-                        const iconHtml = `<div style="background:${color};width:20px;height:20px;border-radius:${radius};
-                            border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.4);
-                            display:flex;align-items:center;justify-content:center;color:white;
-                            font-weight:bold;font-size:10px;">${label}</div>`;
-
+                        
+                        const iconHtml = `
+                            <div style="
+                                background-color: ${color}; 
+                                width: 20px; 
+                                height: 20px; 
+                                border-radius: ${radius}; 
+                                border: 2px solid white; 
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-weight: bold;
+                                font-size: 10px;
+                                font-family: sans-serif;
+                            ">${label}</div>
+                        `;
+                        
                         const customIcon = L.divIcon({
-                            className: 'custom-div-icon',
-                            html: iconHtml,
-                            iconSize: [20, 20],
-                            iconAnchor: [10, 10]
+                            className: 'custom-div-icon', html: iconHtml, iconSize: [20, 20], iconAnchor: [10, 10]
                         });
 
-                        const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
-
+                        const marker = L.marker([lat, lng], {icon: customIcon}).addTo(map);
+                        
                         const popupContent = `
-                            <div class="text-sm">
-                                <strong class="uppercase font-black ${isWater ? 'text-blue-600' : 'text-red-600'}">
-                                    ${isWater ? 'Water Meter' : 'Sprinkler System'}
+                            <div class="text-sm p-1">
+                                <strong class="text-${isWater ? 'blue-600' : 'red-600'} uppercase font-black">
+                                    ${isWater ? '💧 Water Meter' : '🧯 Sprinkler System'}
                                 </strong><br>
-                                <b>${d.address || 'No address'}</b><br>
-                                <small class="text-gray-600">${d.dateTime?.replace('T', ' ') || ''}</small>
-                                ${d.damage === 'Yes' ? '<br><span class="inline-block mt-1 bg-red-600 text-white text-xs px-2 py-1 rounded font-bold">DAMAGED</span>' : ''}
-                                ${d.notes ? `<p class="mt-2 pt-2 border-t text-xs italic text-gray-700">"${d.notes}"</p>` : ''}
-                            </div>`;
+                                <span class="text-gray-800 font-bold block mt-1">${d.address}</span>
+                                <span class="text-xs text-gray-500 block mb-1">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</span>
+                                ${d.damage === 'Yes' ? '<span class="bg-red text-white text-xs px-1 rounded font-bold">⚠️ DAMAGED</span>' : ''}
+                                ${d.notes ? `<p class="text-gray-600 text-xs mt-1 border-t pt-1 italic">"${d.notes}"</p>` : ''}
+                            </div>
+                        `;
                         marker.bindPopup(popupContent);
                     }
                 });
-
+                
                 document.getElementById('count').innerText = `${allReports.length} Reports`;
-            }, (err) => {
-                console.error(err);
-                document.getElementById('count').innerText = 'Load failed';
-                alert("Failed to load data: " + err.message);
+            }, (error) => {
+                console.error("DB Error:", error);
             });
         }
 
-        // ==================== EXPORT CSV ====================
         window.exportToCSV = function() {
-            if (allReports.length === 0) {
-                alert("No reports to export.");
-                return;
-            }
-
-            const headers = ["Type","Address","Date/Time","Latitude","Longitude","Street Location","Within 20ft","Beyond 20ft","Damage","Notes"];
-            const rows = allReports.map(r => {
+            if (allReports.length === 0) { alert("No data."); return; }
+            let csvContent = "data:text/csv;charset=utf-8,Type,Address,Date,Lat,Lon,Street,20ft,Beyond,Damage,Notes\n";
+            allReports.forEach(r => {
                 let lat = "N/A", lng = "N/A";
-                if (r.gps?.includes(',')) [lat, lng] = r.gps.split(',').map(s => s.trim());
-                return [
-                    r.systemType || "",
-                    r.address || "",
-                    r.dateTime || "",
-                    lat, lng,
-                    r.locStreet || "",
-                    r.loc20 || "",
-                    r.locBeyond || "",
-                    r.damage || "",
-                    r.notes || ""
-                ].map(v => `"${(v+"").replace(/"/g, '""')}"`).join(",");
+                if (r.gps && r.gps.includes(',')) [lat, lng] = r.gps.split(',');
+                const clean = (val) => `"${(val || 'N/A').toString().replace(/"/g, '""')}"`;
+                csvContent += `${clean(r.systemType)},${clean(r.address)},${clean(r.dateTime)},${lat},${lng},${clean(r.locStreet)},${clean(r.loc20)},${clean(r.locBeyond)},${clean(r.damage)},${clean(r.notes)}\n`;
             });
-
-            const csv = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.join("\n");
-
             const link = document.createElement("a");
-            link.setAttribute("href", encodeURI(csv));
-            link.setAttribute("download", `Water_Shutoff_Reports_${new Date().toISOString().slice(0,10)}.csv`);
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", "denton_data.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-        };
+        }
 
-        // ==================== DANGER: CLEAR ALL DATA ====================
+        // ──────── CLEAR ALL DATA LOGIC ────────
         window.nukeDatabasePrompt = function() {
-            const count = allReports.length;
-            if (count === 0) {
-                alert("Nothing to delete.");
-                return;
-            }
+            const n = allReports.length;
+            if (n === 0) return alert('Database is already empty.');
 
-            const pw = prompt(
-                `DANGER ZONE\n\n` +
-                `You are about to PERMANENTLY delete ALL ${count} reports.\n\n` +
-                `A full CSV backup will download automatically first.\n\n` +
-                `Enter admin password to proceed:`
-            );
-
+            const pw = prompt(`⚠ ADMIN OVERRIDE ⚠\n\nYou are about to DELETE ALL ${n} reports.\nThis cannot be undone.\n\nA CSV backup will be downloaded automatically.\n\nEnter Admin Password to confirm:`);
+            
             if (pw !== "FDADMIN") {
-                alert("Wrong password. Action canceled.");
+                if (pw !== null) alert("Incorrect Password. Action cancelled.");
                 return;
             }
 
-            if (!confirm(`FINAL CONFIRMATION:\n\nDelete all ${count} reports forever?\n\nNo undo.`)) {
-                return;
-            }
+            if (!confirm(`Are you absolutely sure? \n\n${n} records will be permanently deleted.`)) return;
 
-            // 1. Download backup first
+            // 1. Download Backup
             exportToCSV();
 
-            // 2. Delete everything
+            // 2. Delete Data
             setTimeout(async () => {
                 try {
-                    document.getElementById('count').innerText = 'Deleting all reports...';
-
-                    const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
+                    document.getElementById('count').innerText = 'Deleting...';
+                    
+                    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
+                    const snapshot = await getDocs(q);
                     const batch = writeBatch(db);
+                    
+                    snapshot.docs.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
 
-                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
                     await batch.commit();
-
-                    allReports = [];
-                    map.eachLayer(l => { if (l instanceof L.Marker) map.removeLayer(l); });
-
-                    document.getElementById('count').innerText = '0 Reports';
-                    alert(`Successfully deleted all ${count} reports!\nReady for a fresh start.`);
+                    
+                    alert(`Success: ${n} reports deleted.`);
                 } catch (e) {
-                    console.error(e);
-                    alert("Delete failed: " + e.message);
+                    console.error("Delete Error:", e);
+                    alert("Error deleting data: " + e.message);
                 }
-            }, 1000);
+            }, 1000); 
         };
     </script>
-
     <style>
         .hero-bg { background-color: #152a40; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'); }
-        #login-overlay { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background-color: #152a40; z-index: 9999; display: flex; 
-            align-items: center; justify-content: center;
-            background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
-        }
         .leaflet-pane { z-index: 0 !important; }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #152a40; z-index: 9999; display: flex; align-items: center; justify-content: center; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'); }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
 
-    <!-- LOGIN -->
+    <!-- LOGIN SCREEN -->
     <div id="login-overlay">
         <div class="bg-white p-8 rounded-lg shadow-2xl max-w-md w-full text-center mx-4">
             <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-20 mx-auto mb-6">
             <h2 class="text-2xl font-black text-navy mb-1 uppercase">Admin Access</h2>
             <p class="text-gray-500 text-sm mb-6">Denton Fire Dept. Internal Dashboard</p>
-            <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="Enter Password" 
-                   class="w-full border-2 border-gray-300 rounded p-3 text-lg mb-4 focus:border-navy focus:outline-none text-center tracking-widest">
-            <p id="login-error" class="text-red-600 font-bold text-sm mb-4 hidden">Incorrect Password</p>
-            <button id="login-btn" onclick="checkLogin()" 
-                    class="w-full bg-navy text-white font-bold py-3 rounded hover:bg-gray-800 transition">Login</button>
+            <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="Enter Password" class="w-full border-2 border-gray-300 rounded p-3 text-lg mb-4 focus:border-navy focus:outline-none text-center tracking-widest">
+            <p id="login-error" class="text-red font-bold text-sm mb-4 hidden">Incorrect Password</p>
+            <button id="login-btn" onclick="checkLogin()" class="w-full bg-navy text-white font-bold py-3 rounded hover:bg-gray-800 transition">Login</button>
             <p class="mt-6 text-xs text-gray-400">Authorized Personnel Only</p>
         </div>
     </div>
 
-    <!-- DASHBOARD -->
+    <!-- MAIN DASHBOARD -->
     <div id="dashboard-view" class="hidden flex flex-col h-full">
-        <div class="hero-bg text-white py-6 px-4 text-center shrink-0 shadow-lg z-20">
+        <div class="hero-bg text-white py-6 px-4 text-center shrink-0 shadow-lg relative z-20">
             <div class="flex items-center justify-center gap-4">
-                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-12 drop-shadow-lg">
+                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-12 drop-shadow-lg">
                 <div class="text-left">
                     <h1 class="text-xl font-black uppercase tracking-wide leading-none">Water Shutoff</h1>
                     <p class="text-yellow text-xs font-bold tracking-widest">COMMAND DASHBOARD</p>
@@ -297,34 +271,29 @@
             </div>
         </div>
 
-        <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0">
-            <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
-                <a href="water_shutoff.html" class="bg-navy text-white text-sm font-bold py-2 px-4 rounded hover:bg-gray-800 transition rounded shadow-sm flex items-center gap-2">
-                    <span>+</span> New Submission
-                </a>
-
-                <div class="flex gap-6 text-xs font-bold text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
-                    <div class="flex items-center gap-2">
-                        <div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div>
-                        Water Meter
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div>
-                        Sprinkler
-                    </div>
+        <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0 relative">
+            <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
+                <div class="flex items-center gap-2 w-full md:w-auto">
+                    <a href="water_shutoff.html" class="bg-navy text-white text-sm font-bold py-2 px-6 rounded-lg hover:bg-gray-800 transition shadow-sm text-center flex items-center gap-2">
+                        <span>+</span> New Submission
+                    </a>
                 </div>
 
-                <div class="flex items-center gap-3">
-                    <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">Connecting...</span>
-                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded transition flex items-center gap-1">
-                        CSV
-                    </button>
+                <div class="flex gap-4 text-xs font-bold text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
+                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div> Water</div>
+                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div> Sprinkler</div>
+                </div>
 
-                    <!-- DANGER BUTTON -->
-                    <button onclick="nukeDatabasePrompt()" 
-                            class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-3 rounded transition shadow-sm flex items-center gap-1"
-                            title="Permanently delete ALL reports after downloading backup">
-                        NUKE DATABASE
+                <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                    <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">Connecting...</span>
+                    
+                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded transition shadow-sm flex items-center gap-1">
+                        <span>📄</span> CSV
+                    </button>
+                    
+                    <!-- Fixed: Used bg-red instead of bg-red-600 to resolve Tailwind conflict -->
+                    <button onclick="nukeDatabasePrompt()" class="bg-red hover:opacity-90 text-white text-xs font-bold py-2 px-4 rounded transition shadow-sm flex items-center gap-1 whitespace-nowrap">
+                        <span>⚠️</span> CLEAR DATA
                     </button>
 
                     <button onclick="performLogout()" class="text-gray-400 hover:text-red-500 text-xs font-bold px-2 py-2 rounded transition" title="Logout">
@@ -334,7 +303,7 @@
             </div>
         </div>
 
-        <div id="map" class="flex-grow w-full z-0 bg-gray-200"></div>
+        <div id="map" class="flex-grow w-full z-0 bg-gray-200 relative"></div>
     </div>
 </body>
 </html>
