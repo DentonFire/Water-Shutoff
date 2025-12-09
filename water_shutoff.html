@@ -19,7 +19,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- YOUR REAL CONFIGURATION (Pre-Filled) ---
+        // --- FIREBASE CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
             authDomain: "denton-fire-tools.firebaseapp.com",
@@ -28,6 +28,7 @@
             messagingSenderId: "751121603550",
             appId: "1:751121603550:web:3a8f25b990d45038ae1b4f"
         };
+        // ------------------------------
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -41,7 +42,7 @@
                 await signInAnonymously(auth);
             } catch (e) {
                 console.error("Auth Error:", e);
-                // Fail silently on load so we don't annoy users
+                alert("Database Connection Error: " + e.message);
             }
         };
         initAuth();
@@ -102,12 +103,21 @@
 
             // 3. Process
             try {
+                // Determine values for location fields based on system type
+                // Use explicit "N/A" strings to ensure CSV columns are never empty/null
+                const isWaterMeter = (systemType === 'Water Meter');
+                
                 const reportData = {
-                    address, dateTime, systemType, gps, damage, notes, 
-                    // Explicitly save "N/A" string if not Water Meter (Fixes empty CSV cells)
-                    locStreet: systemType === 'Water Meter' ? locStreet : "N/A",
-                    loc20: systemType === 'Water Meter' ? loc20 : "N/A",
-                    locBeyond: systemType === 'Water Meter' ? locBeyond : "N/A",
+                    address: address,
+                    dateTime: dateTime,
+                    systemType: systemType,
+                    gps: gps || "", 
+                    damage: damage,
+                    notes: notes || "", 
+                    // Force string values for consistent CSV export
+                    locStreet: isWaterMeter ? locStreet : "N/A",
+                    loc20: isWaterMeter ? loc20 : "N/A",
+                    locBeyond: isWaterMeter ? locBeyond : "N/A",
                     timestamp: serverTimestamp(),
                     userId: currentUser ? currentUser.uid : 'anonymous'
                 };
@@ -133,6 +143,7 @@
             } catch (e) {
                 console.error("Submit Error:", e);
                 alert("Database error (" + e.message + "). Opening email fallback.");
+                // Attempt fallback email even if DB fails
                 try {
                     const fallbackData = {
                         address: address || "Unknown",
@@ -154,8 +165,9 @@
         function generateEmail(data) {
             let recipient, subject, locationBlock;
             
+            // UPDATED EMAIL ADDRESS
             if (data.systemType === "Water Meter") {
-                recipient = "James.Gideon@cityofdenton.com";
+                recipient = "watermetering@cityofdenton.com";
                 subject = "Water Meter Shutoff";
                 locationBlock = `LOCATION DETAILS
 --------------------------------
@@ -369,7 +381,9 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                         <input type="text" id="address" oninput="handleAddressInput(event)" class="w-full border border-gray-300 rounded p-2 focus:border-navy outline-none" placeholder="123 Example St, Denton, TX" autocomplete="off">
                         <div id="address-results" class="absolute z-10 w-full bg-white border border-gray-300 rounded-b shadow-lg hidden mt-0 max-h-60 overflow-y-auto"></div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
+                    
+                    <!-- UPDATED SPACING: Vertical stack on mobile, side-by-side on desktop -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Date/Time <span class="text-red">*</span></label>
                             <input type="datetime-local" id="datetime" class="w-full border border-gray-300 rounded p-2 focus:border-navy outline-none">
