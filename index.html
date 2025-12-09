@@ -3,23 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Water Shutoff Dashboard</title>
+    <title>Admin Dashboard - Water Shutoff</title>
+    
     <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = { theme: { extend: { colors: { navy: '#152a40', red: '#bf2726', yellow: '#f9c031' } } } }
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { navy: '#152a40', red: '#bf2726', yellow: '#f9c031' },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
     </script>
 
+    <!-- Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, collection, query, orderBy, onSnapshot,
-            getDocs, writeBatch 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- YOUR REAL CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
             authDomain: "denton-fire-tools.firebaseapp.com",
@@ -33,203 +44,302 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = 'denton-fire-tools';
-
         let map;
+        let allReports = []; 
 
-        // Login & Session
+        // --- AUTH & SESSION LOGIC ---
         window.addEventListener('DOMContentLoaded', () => {
-            if (localStorage.getItem('denton_admin_session') === 'active') {
-                document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('dashboard-view').classList.remove('hidden');
+            const session = localStorage.getItem('denton_admin_session');
+            if (session === 'active') {
+                showDashboard();
                 connectFirebase();
             }
         });
 
-        window.checkLogin = () => {
-            if (document.getElementById('admin-pass').value === "FDADMIN") {
+        window.checkLogin = function() {
+            const pass = document.getElementById('admin-pass').value;
+            const errorMsg = document.getElementById('login-error');
+            const loginBtn = document.getElementById('login-btn');
+            
+            if (pass === "FDADMIN") {
+                loginBtn.innerHTML = "Connecting...";
                 localStorage.setItem('denton_admin_session', 'active');
-                document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('dashboard-view').classList.remove('hidden');
+                showDashboard();
                 connectFirebase();
             } else {
-                document.getElementById('login-error').classList.remove('hidden');
+                errorMsg.classList.remove('hidden');
+                document.getElementById('admin-pass').value = '';
             }
-        };
+        }
 
-        window.performLogout = () => {
+        window.performLogout = function() {
             localStorage.removeItem('denton_admin_session');
-            signOut(auth).then(() => location.reload());
-        };
+            signOut(auth).then(() => {
+                location.reload(); 
+            });
+        }
 
-        const connectFirebase = () => {
-            signInAnonymously(auth);
-            onAuthStateChanged(auth, user => {
+        window.handleEnter = function(e) { if (e.key === 'Enter') window.checkLogin(); }
+
+        // --- HELPERS ---
+        function showDashboard() {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('dashboard-view').classList.remove('hidden');
+            setTimeout(() => { if (map) map.invalidateSize(); }, 200);
+        }
+
+        function connectFirebase() {
+            signInAnonymously(auth).catch((error) => {
+                console.error("Auth Failed", error);
+                alert("Database Connection Failed: " + error.message);
+            });
+
+            onAuthStateChanged(auth, (user) => {
                 if (user) {
                     initMap();
                     listenToData();
                 }
             });
-        };
+        }
 
-        const initMap = () => {
-            if (map) return;
-            map = L.map('map').setView([33.2148, -97.1331], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        };
-
-        const listenToData = () => {
-            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'), orderBy('dateTime', 'desc'));
-            document.getElementById('count').innerText = 'Loading…';
-
-            onSnapshot(q, snap => {
-                map.eachLayer(l => { if (l instanceof L.Marker) map.removeLayer(l); });
-                let count = 0;
-
-                snap.forEach(doc => {
-                    count++;
-                    const d = doc.data();
-                    if (d.gps?.includes(',')) {
-                        const [lat, lng] = d.gps.split(',').map(Number);
-                        if (!isNaN(lat) && !isNaN(lng)) {
-                            const isWater = d.systemType === 'Water Meter';
-                            const icon = L.divIcon({
-                                html: `<div style="background:${isWater?'#2563eb':'#dc2626'};width:22px;height:22px;border-radius:${isWater?'50%':'4px'};
-                                        border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);color:white;font-weight:bold;
-                                        display:flex;align-items:center;justify-content:center;font-size:11px;">${isWater?'W':'S'}</div>`,
-                                iconSize: [22,22]
-                            });
-                            L.marker([lat, lng], {icon}).addTo(map).bindPopup(
-                                `<b class="${isWater?'text-blue-600':'text-red-600'} font-black">${isWater?'Water Meter':'Sprinkler'}</b><br>${d.address||''}<br>${(d.dateTime||'').replace('T',' ')}`
-                            );
-                        }
-                    }
-                });
-
-                document.getElementById('count').innerText = count + ' Reports';
-            });
-        };
-
-        // FIXED: Always gets fresh, complete data directly from Firestore
-        window.exportToCSV = async function() {
-            try {
-                const btn = document.querySelector('button[onclick="exportToCSV()"]');
-                if (btn) btn.disabled = true;
-
-                const snapshot = await getDocs(
-                    query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'), 
-                          orderBy('dateTime', 'desc'))
-                );
-
-                if (snapshot.empty) {
-                    alert("No reports in database.");
-                    return;
-                }
-
-                const headers = ["Type","Address","Date/Time","Latitude","Longitude","Street Location","Within 20ft","Beyond 20ft","Damage","Notes"];
-                const rows = [];
-
-                snapshot.forEach(doc => {
-                    const d = doc.data();
-                    let lat = "N/A", lng = "N/A";
-                    if (d.gps && d.gps.includes(',')) {
-                        [lat, lng] = d.gps.split(',').map(s => s.trim());
-                    }
-
-                    rows.push([
-                        d.systemType || "",
-                        d.address || "",
-                        (d.dateTime || "").replace('T', ' '),
-                        lat, lng,
-                        d.locStreet || "",
-                        d.loc20 || "",
-                        d.locBeyond || "",
-                        d.damage || "",
-                        d.notes || ""
-                    ].map(v => `"${(v+"").replace(/"/g, '""')}"`).join(","));
-                });
-
-                const csv = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.join("\n");
-                const a = document.createElement('a');
-                a.href = encodeURI(csv);
-                a.download = `Water_Shutoffs_${new Date().toISOString().slice(0,10)}.csv`;
-                a.click();
-
-                alert(`Success! Exported all ${rows.length} reports.`);
-            } catch (e) {
-                alert("Export failed: " + e.message);
-            } finally {
-                const btn = document.querySelector('button[onclick="exportToCSV()"]');
-                if (btn) btn.disabled = false;
+        // --- MAP & DATA LOGIC ---
+        function initMap() {
+            if (map) {
+                setTimeout(() => map.invalidateSize(), 100);
+                return;
             }
-        };
+            map = L.map('map').setView([33.2148, -97.1331], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+        }
 
-        // CLEAR ALL DATA (safe + visible)
-        window.nukeDatabasePrompt = async function() {
-            const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
-            const n = snapshot.size;
-            if (n === 0) return alert("No reports to delete.");
+        function listenToData() {
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
+            
+            onSnapshot(q, (snapshot) => {
+                map.eachLayer((layer) => {
+                    if (layer instanceof L.Marker) { map.removeLayer(layer); }
+                });
 
-            const pw = prompt(`Delete ALL ${n} reports permanently?\n\nCSV backup will download first.\n\nEnter password:`);
-            if (pw !== "FDADMIN") return alert("Wrong password.");
+                allReports = []; 
 
-            if (!confirm(`IRREVERSIBLE: Delete all ${n} reports?`)) return;
+                snapshot.forEach((doc) => {
+                    const d = doc.data();
+                    allReports.push(d);
 
+                    if (d.gps && d.gps.includes(',')) {
+                        const [lat, lng] = d.gps.split(',').map(Number);
+                        const isWater = d.systemType === 'Water Meter';
+                        
+                        const color = isWater ? '#2563eb' : '#dc2626'; 
+                        const radius = isWater ? '50%' : '2px'; 
+                        const label = isWater ? 'W' : 'S';
+                        
+                        const iconHtml = `
+                            <div style="
+                                background-color: ${color}; 
+                                width: 20px; 
+                                height: 20px; 
+                                border-radius: ${radius}; 
+                                border: 2px solid white; 
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-weight: bold;
+                                font-size: 10px;
+                                font-family: sans-serif;
+                            ">${label}</div>
+                        `;
+                        
+                        const customIcon = L.divIcon({
+                            className: 'custom-div-icon', html: iconHtml, iconSize: [20, 20], iconAnchor: [10, 10]
+                        });
+
+                        const marker = L.marker([lat, lng], {icon: customIcon}).addTo(map);
+                        
+                        const popupContent = `
+                            <div class="text-sm p-1">
+                                <strong class="text-${isWater ? 'blue-600' : 'red-600'} uppercase font-black">
+                                    ${isWater ? '💧 Water Meter' : '🧯 Sprinkler System'}
+                                </strong><br>
+                                <span class="text-gray-800 font-bold block mt-1">${d.address}</span>
+                                <span class="text-xs text-gray-500 block mb-1">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</span>
+                                ${d.damage === 'Yes' ? '<span class="bg-red text-white text-xs px-1 rounded font-bold">⚠️ DAMAGED</span>' : ''}
+                                ${d.notes ? `<p class="text-gray-600 text-xs mt-1 border-t pt-1 italic">"${d.notes}"</p>` : ''}
+                            </div>
+                        `;
+                        marker.bindPopup(popupContent);
+                    }
+                });
+                
+                document.getElementById('count').innerText = `${allReports.length} Reports`;
+            }, (error) => {
+                console.error("DB Error:", error);
+            });
+        }
+
+        // --- UPDATED CSV EXPORT FUNCTION ---
+        window.exportToCSV = function() {
+            if (allReports.length === 0) { alert("No data."); return; }
+            
+            // Header row
+            const headers = ["Type", "Address", "Date", "Lat", "Lon", "Street", "20ft", "Beyond", "Damage", "Notes"];
+            const rows = [headers];
+
+            // Helper to clean data for CSV (handles quotes and commas)
+            const clean = (val) => {
+                if (val === null || val === undefined) return '';
+                const str = String(val);
+                // If contains quote, comma or newline, wrap in quotes and double internal quotes
+                if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+                    return `"${str.replace(/"/g, '""')}"`;
+                }
+                return str;
+            };
+
+            allReports.forEach(r => {
+                let lat = "N/A", lng = "N/A";
+                if (r.gps && r.gps.includes(',')) [lat, lng] = r.gps.split(',');
+
+                rows.push([
+                    clean(r.systemType),
+                    clean(r.address),
+                    clean(r.dateTime),
+                    lat,
+                    lng,
+                    clean(r.locStreet),
+                    clean(r.loc20),
+                    clean(r.locBeyond),
+                    clean(r.damage),
+                    clean(r.notes)
+                ]);
+            });
+
+            // Join rows with newlines, and columns with commas
+            let csvContent = rows.map(e => e.join(",")).join("\n");
+
+            // Create a Blob with UTF-8 BOM so Excel opens emojis/symbols correctly
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            
+            // Create a download link using URL API (no length limit)
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "denton_data.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url); // Clean up memory
+        }
+
+        // ──────── CLEAR ALL DATA LOGIC ────────
+        window.nukeDatabasePrompt = function() {
+            const n = allReports.length;
+            if (n === 0) return alert('Database is already empty.');
+
+            const pw = prompt(`⚠ ADMIN OVERRIDE ⚠\n\nYou are about to DELETE ALL ${n} reports.\nThis cannot be undone.\n\nA CSV backup will be downloaded automatically.\n\nEnter Admin Password to confirm:`);
+            
+            if (pw !== "FDADMIN") {
+                if (pw !== null) alert("Incorrect Password. Action cancelled.");
+                return;
+            }
+
+            if (!confirm(`Are you absolutely sure? \n\n${n} records will be permanently deleted.`)) return;
+
+            // 1. Download Backup
             exportToCSV();
+
+            // 2. Delete Data
             setTimeout(async () => {
                 try {
+                    document.getElementById('count').innerText = 'Deleting...';
+                    
+                    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
+                    const snapshot = await getDocs(q);
                     const batch = writeBatch(db);
-                    snapshot.docs.forEach(d => batch.delete(d.ref));
+                    
+                    snapshot.docs.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+
                     await batch.commit();
-                    map.eachLayer(l => { if (l instanceof L.Marker) map.removeLayer(l); });
-                    document.getElementById('count').innerText = '0 Reports';
-                    alert("All reports deleted.");
-                } catch (e) { alert("Delete failed: " + e.message); }
-            }, 1500);
+                    
+                    alert(`Success: ${n} reports deleted.`);
+                } catch (e) {
+                    console.error("Delete Error:", e);
+                    alert("Error deleting data: " + e.message);
+                }
+            }, 1000); 
         };
     </script>
-
     <style>
-        .hero-bg { background:#152a40 url('https://www.transparenttextures.com/patterns/cubes.png'); }
-        #login-overlay { position:fixed; inset:0; background:#152a40; z-index:9999; display:flex; align-items:center; justify-content:center; }
+        .hero-bg { background-color: #152a40; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'); }
+        .leaflet-pane { z-index: 0 !important; }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #152a40; z-index: 9999; display: flex; align-items: center; justify-content: center; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'); }
     </style>
 </head>
-<body class="bg-gray-100 h-screen flex flex-col">
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
 
+    <!-- LOGIN SCREEN -->
     <div id="login-overlay">
-        <div class="bg-white p-10 rounded-2xl shadow-2xl text-center max-w-sm">
-            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-24 mx-auto mb-6">
-            <h2 class="text-3xl font-black text-navy uppercase">Admin Access</h2>
-            <input type="password" id="admin-pass" class="w-full border-2 rounded-lg px-4 py-3 mt-8 text-center text-xl tracking-widest">
-            <p id="login-error" class="text-red-600 font-bold mt-2 hidden">Wrong</p>
-            <button onclick="checkLogin()" class="w-full bg-navy text-white font-bold py-4 rounded-lg mt-4 hover:bg-gray-800">LOGIN</button>
+        <div class="bg-white p-8 rounded-lg shadow-2xl max-w-md w-full text-center mx-4">
+            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-20 mx-auto mb-6">
+            <h2 class="text-2xl font-black text-navy mb-1 uppercase">Admin Access</h2>
+            <p class="text-gray-500 text-sm mb-6">Denton Fire Dept. Internal Dashboard</p>
+            <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="Enter Password" class="w-full border-2 border-gray-300 rounded p-3 text-lg mb-4 focus:border-navy focus:outline-none text-center tracking-widest">
+            <p id="login-error" class="text-red font-bold text-sm mb-4 hidden">Incorrect Password</p>
+            <button id="login-btn" onclick="checkLogin()" class="w-full bg-navy text-white font-bold py-3 rounded hover:bg-gray-800 transition">Login</button>
+            <p class="mt-6 text-xs text-gray-400">Authorized Personnel Only</p>
         </div>
     </div>
 
+    <!-- MAIN DASHBOARD -->
     <div id="dashboard-view" class="hidden flex flex-col h-full">
-        <div class="hero-bg text-white py-6 text-center shadow-lg">
-            <div class="flex justify-center items-center gap-4">
-                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-14">
-                <div><h1 class="text-2xl font-black uppercase">Water Shutoff</h1><p class="text-yellow font-bold">COMMAND DASHBOARD</p></div>
-            </div>
-        </div>
-
-        <div class="bg-white shadow-md px-4 py-3 border-b">
-            <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                <a href="water_shutoff.html" class="bg-navy text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-800">+ New Submission</a>
-                <div class="flex gap-5 text-xs font-bold text-gray-600 bg-gray-50 px-5 py-2 rounded-full">
-                    <span class="flex items-center gap-2"><div class="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] flex items-center justify-center font-black">W</div> Water</span>
-                    <span class="flex items-center gap-2"><div class="w-5 h-5 rounded bg-red-600 text-white text-[10px] flex items-center justify-center font-black">S</div> Sprinkler</span>
-                </div>
-                <div class="flex items-center gap-3 flex-wrap">
-                    <span id="count" class="bg-gray-200 px-4 py-2 rounded-full font-bold">…</span>
-                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg">CSV</button>
-                    <button onclick="nukeDatabasePrompt()" class="bg-red-600 hover:bg-red-800 text-white font-bold px-6 py-2 rounded-lg">CLEAR ALL DATA</button>
-                    <button onclick="performLogout()" class="text-gray-500 hover:text-red-600 font-bold">LOGOUT</button>
+        <div class="hero-bg text-white py-6 px-4 text-center shrink-0 shadow-lg relative z-20">
+            <div class="flex items-center justify-center gap-4">
+                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-12 drop-shadow-lg">
+                <div class="text-left">
+                    <h1 class="text-xl font-black uppercase tracking-wide leading-none">Water Shutoff</h1>
+                    <p class="text-yellow text-xs font-bold tracking-widest">COMMAND DASHBOARD</p>
                 </div>
             </div>
         </div>
 
-        <div id="map" class="flex-1 bg-gray-200"></div>
+        <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0 relative">
+            <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
+                <div class="flex items-center gap-2 w-full md:w-auto">
+                    <a href="water_shutoff.html" class="bg-navy text-white text-sm font-bold py-2 px-6 rounded-lg hover:bg-gray-800 transition shadow-sm text-center flex items-center gap-2">
+                        <span>+</span> New Submission
+                    </a>
+                </div>
+
+                <div class="flex gap-4 text-xs font-bold text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
+                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div> Water</div>
+                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div> Sprinkler</div>
+                </div>
+
+                <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                    <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">Connecting...</span>
+                    
+                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded transition shadow-sm flex items-center gap-1">
+                        <span>📄</span> CSV
+                    </button>
+                    
+                    <button onclick="nukeDatabasePrompt()" class="bg-red hover:opacity-90 text-white text-xs font-bold py-2 px-4 rounded transition shadow-sm flex items-center gap-1 whitespace-nowrap">
+                        <span>⚠️</span> CLEAR DATA
+                    </button>
+
+                    <button onclick="performLogout()" class="text-gray-400 hover:text-red-500 text-xs font-bold px-2 py-2 rounded transition" title="Logout">
+                        LOGOUT
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="map" class="flex-grow w-full z-0 bg-gray-200 relative"></div>
     </div>
 </body>
 </html>
