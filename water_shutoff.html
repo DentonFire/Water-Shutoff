@@ -128,11 +128,11 @@
             loadUnits();
         });
 
-        // --- NEW SUBMIT FLOW WITH FIRE WATCH REMINDER ---
+        // --- SUBMIT FLOW ---
         
-        // Step 1: Validate and show Modal
+        // Step 1: Validate
         window.initiateSubmit = function() {
-            // Basic Validation Logic copied from original submit
+            // Validation
             const address = document.getElementById('address').value;
             const dateTime = document.getElementById('datetime').value;
             const systemTypeElement = document.querySelector('input[name="systemType"]:checked');
@@ -161,13 +161,21 @@
                 return;
             }
 
-            // If Valid, Show Fire Watch Modal
-            document.getElementById('firewatch-modal').classList.remove('hidden');
+            // Check if Fire Watch is ALREADY issued
+            const isFireWatchIssued = document.getElementById('fire-watch-check').checked;
+
+            if (isFireWatchIssued) {
+                // If yes, skip reminder and submit immediately
+                finalSubmit();
+            } else {
+                // If no, show reminder modal
+                document.getElementById('firewatch-modal').classList.remove('hidden');
+            }
         }
 
-        // Step 2: Actually Submit (Called from Modal)
+        // Step 2: Final Submit
         window.finalSubmit = async function() {
-            document.getElementById('firewatch-modal').classList.add('hidden'); // Close modal
+            document.getElementById('firewatch-modal').classList.add('hidden');
             
             const btn = document.getElementById('submit-btn');
             const originalText = "📤 Submit & Generate Email"; 
@@ -177,7 +185,7 @@
             btn.classList.add('opacity-50');
 
             try {
-                // Re-gather data (safe since we validated)
+                // Gather Data
                 const address = document.getElementById('address').value;
                 const dateTime = document.getElementById('datetime').value;
                 const systemType = document.querySelector('input[name="systemType"]:checked').value;
@@ -195,6 +203,9 @@
                     saveNewUnit(unitVal);
                 }
 
+                // Get Fire Watch Status
+                const fireWatchStatus = document.getElementById('fire-watch-check').checked ? "Yes" : "No";
+
                 const isWaterMeter = (systemType === 'Water Meter');
                 
                 const reportData = {
@@ -205,6 +216,7 @@
                     gps: gps || "", 
                     damage: damage,
                     notes: notes || "", 
+                    fireWatch: fireWatchStatus, // NEW FIELD
                     locStreet: isWaterMeter ? locStreet : "N/A",
                     loc20: isWaterMeter ? loc20 : "N/A",
                     locBeyond: isWaterMeter ? locBeyond : "N/A",
@@ -234,7 +246,6 @@
             } catch (e) {
                 console.error("Submit Error:", e);
                 alert("Database error (" + e.message + "). Opening email fallback.");
-                // Fallback Logic omitted for brevity but follows same pattern
             } finally {
                 btn.innerText = originalText;
                 btn.disabled = false;
@@ -273,6 +284,7 @@ UNIT: ${data.unit || 'N/A'}
 TYPE: ${data.systemType || 'N/A'}
 ADDRESS: ${data.address || 'N/A'}
 DATE/TIME: ${(data.dateTime || '').replace('T', ' ')}
+FIRE WATCH ISSUED: ${data.fireWatch || 'No'}
 
 ${locationBlock}
 
@@ -289,10 +301,9 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
             window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(cleanBody)}`;
         }
 
-        // --- UI Logic for Modals ---
+        // --- UI Logic ---
         window.openQRModal = function() {
             const qrImg = document.getElementById('qr-image');
-            // UPDATED: Hardcoded link per request
             const targetUrl = "https://dentonfire.github.io/Water-Shutoff/water_shutoff.html";
             qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(targetUrl)}`;
             document.getElementById('qr-modal').classList.remove('hidden');
@@ -304,7 +315,6 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
             document.getElementById('firewatch-modal').classList.add('hidden');
         }
 
-        // --- GPS Logic ---
         function resetGPSBtn(btn) {
             btn.innerHTML = "<span>📍</span> Get My Location";
             btn.disabled = false;
@@ -450,7 +460,6 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
         #address-results::-webkit-scrollbar { width: 6px; }
         #address-results::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         
-        /* Modal Animation */
         .modal-fade-in { animation: fadeIn 0.2s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
@@ -460,11 +469,9 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
     <div class="paper-doc">
         <!-- HEADER UTILITY BAR -->
         <div class="absolute top-4 right-4 flex gap-2">
-            <!-- Fire Watch Link -->
             <a href="https://dentonfire.github.io/Fire-Watch/" target="_blank" class="bg-red text-white p-2 rounded shadow hover:bg-red-700 text-xs font-bold uppercase flex items-center gap-1" title="Fire Watch Protocols">
                 <span>🔥</span> Fire Watch
             </a>
-            <!-- QR Share Button (Larger Icon) -->
             <button onclick="openQRModal()" class="bg-gray-100 text-navy p-3 rounded shadow hover:bg-gray-200" title="Share Survey via QR">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 6h6v6H6V6zm12 0h-6v6h6V6zm-6 12H6v-6h6v6z"></path></svg>
             </button>
@@ -572,7 +579,14 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
 
             <!-- Actions -->
             <div class="pt-6">
-                <!-- IMPORTANT: Changed onclick to initiateSubmit() to show modal first -->
+                <!-- Fire Watch Checkbox -->
+                <div class="mb-4 flex items-center justify-center">
+                    <label class="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 shadow-sm hover:bg-gray-100 transition">
+                        <input type="checkbox" id="fire-watch-check" class="w-5 h-5 text-navy rounded focus:ring-navy">
+                        <span class="text-sm font-bold text-navy">Fire Watch Issued</span>
+                    </label>
+                </div>
+
                 <button type="button" id="submit-btn" onclick="initiateSubmit()" class="w-full bg-navy text-white font-bold py-4 rounded-lg hover:bg-gray-800 transition shadow-lg flex items-center justify-center gap-2 text-lg">📤 Submit & Generate Email</button>
                 <p id="routing-info" class="text-center text-xs text-gray-500 mt-2">Submitting logs the data to the map and opens your email client.</p>
             </div>
@@ -605,8 +619,9 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                     <span>📄</span> Open Guidelines
                 </a>
                 
+                <!-- Fixed Button Text -->
                 <button onclick="finalSubmit()" class="block w-full bg-gray-100 text-navy font-bold py-3 rounded hover:bg-gray-200 transition">
-                    No / Proceed to Submit →
+                    Proceed to Submit →
                 </button>
             </div>
             <button onclick="closeFireWatchModal()" class="mt-4 text-xs text-gray-400 hover:text-gray-600">Cancel</button>
