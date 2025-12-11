@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Water Shutoff</title>
+    <title>Command | Water Shutoff</title>
     
     <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
     
@@ -11,18 +11,117 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
+    <!-- Leaflet MarkerCluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: { navy: '#152a40', red: '#bf2726', yellow: '#f9c031' },
-                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                    colors: { 
+                        navy: { DEFAULT: '#152a40', light: '#1e3a58', glass: 'rgba(21, 42, 64, 0.8)' },
+                        red: { DEFAULT: '#bf2726', hover: '#991f1e' },
+                        yellow: '#f9c031',
+                        slate: { 850: '#151f2e' }
+                    },
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    boxShadow: {
+                        'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
+                        'floating': '0 8px 30px rgba(0,0,0,0.12)'
+                    },
+                    animation: {
+                        'scan': 'scan-line 3s linear infinite',
+                    },
+                    keyframes: {
+                        'scan-line': {
+                            '0%': { backgroundPosition: '100% 0' },
+                            '100%': { backgroundPosition: '-100% 0' },
+                        }
+                    }
                 }
             }
         }
     </script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .glass-dark {
+            background: rgba(21, 42, 64, 0.95);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+
+        /* Map Tweaks */
+        .leaflet-pane { z-index: 0 !important; }
+        .leaflet-control-zoom { border: none !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }
+        .leaflet-bar a { border-radius: 8px !important; width: 36px !important; height: 36px !important; line-height: 36px !important; color: #152a40 !important; margin-bottom: 6px !important; border: none !important; }
+        
+        /* Login Background with Architectural Texture */
+        #login-overlay { 
+            background-color: #152a40; 
+            background-image: url('https://www.transparenttextures.com/patterns/cubes.png'), radial-gradient(circle at top right, #1e3a58, #152a40);
+            background-repeat: repeat, no-repeat;
+        }
+
+        /* Marker Pulse Animation */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.33); opacity: 1; }
+            80%, 100% { opacity: 0; }
+        }
+        .marker-pulse { position: relative; }
+        .marker-pulse::before {
+            content: '';
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 100%; height: 100%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 2px solid white;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        /* Custom Cluster Icon */
+        .marker-cluster-custom {
+            background: rgba(21, 42, 64, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Scan Line Animation Gradient */
+        .scan-line-gradient {
+            background: linear-gradient(90deg, #152a40 0%, #ef4444 50%, #152a40 100%);
+            background-size: 200% 100%;
+        }
+    </style>
 
     <!-- Firebase -->
     <script type="module">
@@ -30,7 +129,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- YOUR REAL CONFIGURATION ---
+        // --- CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
             authDomain: "denton-fire-tools.firebaseapp.com",
@@ -44,15 +143,37 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = 'denton-fire-tools';
+        
         let map;
-        let allReports = []; 
+        let markersCluster;
+        let allReports = [];
+        let reportMarkers = new Map(); 
 
         // --- AUTH & SESSION LOGIC ---
         window.addEventListener('DOMContentLoaded', () => {
+            // 1. Check Previous Session
             const session = localStorage.getItem('denton_admin_session');
             if (session === 'active') {
                 showDashboard();
                 connectFirebase();
+            }
+
+            // 2. Check Security (HTTPS vs HTTP)
+            const isSecure = window.location.protocol === 'https:';
+            const statusLight = document.getElementById('secure-light');
+            const statusText = document.getElementById('secure-text');
+
+            if (isSecure) {
+                // Secure State
+                statusLight.classList.add('bg-green-500', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
+                statusText.innerText = "SECURE CONNECTION // DFD-INT";
+                statusText.classList.add('text-blue-200');
+            } else {
+                // Unsecure State (likely local testing)
+                statusLight.classList.add('bg-red-500', 'animate-pulse', 'shadow-[0_0_8px_rgba(239,68,68,0.6)]');
+                statusText.innerText = "UNENCRYPTED // LOCALHOST";
+                statusText.classList.remove('text-blue-200');
+                statusText.classList.add('text-red-300');
             }
         });
 
@@ -62,17 +183,27 @@
             const loginBtn = document.getElementById('login-btn');
             
             if (pass === "FDADMIN") {
-                loginBtn.innerHTML = "Connecting...";
+                loginBtn.innerHTML = `
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg> Connecting...`;
                 localStorage.setItem('denton_admin_session', 'active');
-                showDashboard();
-                connectFirebase();
+                
+                setTimeout(() => {
+                    showDashboard();
+                    connectFirebase();
+                }, 800);
             } else {
                 errorMsg.classList.remove('hidden');
+                errorMsg.classList.add('animate-bounce');
                 document.getElementById('admin-pass').value = '';
+                setTimeout(() => errorMsg.classList.remove('animate-bounce'), 1000);
             }
         }
 
         window.performLogout = function() {
+            if(!confirm("End secure session?")) return;
             localStorage.removeItem('denton_admin_session');
             signOut(auth).then(() => {
                 location.reload(); 
@@ -81,11 +212,31 @@
 
         window.handleEnter = function(e) { if (e.key === 'Enter') window.checkLogin(); }
 
-        // --- HELPERS ---
+        // --- UI HELPERS ---
         function showDashboard() {
-            document.getElementById('login-overlay').style.display = 'none';
-            document.getElementById('dashboard-view').classList.remove('hidden');
-            setTimeout(() => { if (map) map.invalidateSize(); }, 200);
+            const overlay = document.getElementById('login-overlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+            }, 500);
+        }
+
+        window.toggleSidebar = function() {
+            const sidebar = document.getElementById('list-sidebar');
+            sidebar.classList.toggle('-translate-x-full');
+        }
+
+        window.flyToReport = function(lat, lng, reportId) {
+            if (window.innerWidth < 768) {
+                document.getElementById('list-sidebar').classList.add('-translate-x-full');
+            }
+            map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
+            const marker = reportMarkers.get(reportId);
+            if (marker) {
+                markersCluster.zoomToShowLayer(marker, () => { marker.openPopup(); });
+            }
         }
 
         function connectFirebase() {
@@ -108,123 +259,111 @@
                 setTimeout(() => map.invalidateSize(), 100);
                 return;
             }
-            map = L.map('map').setView([33.2148, -97.1331], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors'
+            map = L.map('map', { zoomControl: false }).setView([33.2148, -97.1331], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
             }).addTo(map);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+            markersCluster = L.markerClusterGroup({
+                iconCreateFunction: function(cluster) {
+                    return L.divIcon({ 
+                        html: '<div><span>' + cluster.getChildCount() + '</span></div>', 
+                        className: 'marker-cluster-custom', 
+                        iconSize: L.point(40, 40) 
+                    });
+                },
+                showCoverageOnHover: false, maxClusterRadius: 40
+            });
+            map.addLayer(markersCluster);
         }
 
         function listenToData() {
             const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
-            
             onSnapshot(q, (snapshot) => {
-                map.eachLayer((layer) => {
-                    if (layer instanceof L.Marker) { map.removeLayer(layer); }
-                });
-
-                allReports = []; 
+                markersCluster.clearLayers();
+                reportMarkers.clear();
+                allReports = [];
+                const listContainer = document.getElementById('report-list');
+                listContainer.innerHTML = '';
 
                 snapshot.forEach((doc) => {
                     const d = doc.data();
+                    d._id = doc.id;
                     allReports.push(d);
 
                     if (d.gps && d.gps.includes(',')) {
                         const [lat, lng] = d.gps.split(',').map(Number);
                         const isWater = d.systemType === 'Water Meter';
-                        
                         const color = isWater ? '#2563eb' : '#dc2626'; 
-                        const radius = isWater ? '50%' : '2px'; 
+                        const radius = isWater ? '50%' : '6px';
                         const label = isWater ? 'W' : 'S';
-                        
-                        const iconHtml = `
-                            <div style="
-                                background-color: ${color}; 
-                                width: 20px; 
-                                height: 20px; 
-                                border-radius: ${radius}; 
-                                border: 2px solid white; 
-                                box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                color: white;
-                                font-weight: bold;
-                                font-size: 10px;
-                                font-family: sans-serif;
-                            ">${label}</div>
-                        `;
-                        
-                        const customIcon = L.divIcon({
-                            className: 'custom-div-icon', html: iconHtml, iconSize: [20, 20], iconAnchor: [10, 10]
-                        });
-
-                        const marker = L.marker([lat, lng], {icon: customIcon}).addTo(map);
-                        
+                        const shadowColor = isWater ? 'rgba(37, 99, 235, 0.4)' : 'rgba(220, 38, 38, 0.4)';
+                        const iconHtml = `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: ${radius}; border: 2px solid white; box-shadow: 0 4px 10px ${shadowColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 11px; font-family: 'Inter', sans-serif;">${label}</div>`;
+                        const customIcon = L.divIcon({ className: 'custom-div-icon marker-pulse', html: iconHtml, iconSize: [24, 24], iconAnchor: [12, 12] });
+                        const marker = L.marker([lat, lng], {icon: customIcon});
                         const popupContent = `
-                            <div class="text-sm p-1">
-                                <strong class="text-${isWater ? 'blue-600' : 'red-600'} uppercase font-black">
-                                    ${isWater ? '💧 Water Meter' : '🧯 Sprinkler System'}
-                                </strong><br>
-                                <span class="text-gray-800 font-bold block mt-1">${d.address}</span>
-                                <span class="text-xs text-gray-500 block mb-1">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</span>
-                                ${d.damage === 'Yes' ? '<span class="bg-red text-white text-xs px-1 rounded font-bold">⚠️ DAMAGED</span>' : ''}
-                                ${d.notes ? `<p class="text-gray-600 text-xs mt-1 border-t pt-1 italic">"${d.notes}"</p>` : ''}
-                            </div>
-                        `;
-                        marker.bindPopup(popupContent);
+                            <div class="font-sans min-w-[180px]">
+                                <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+                                    <span class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Type</span>
+                                    <span class="text-xs font-black ${isWater ? 'text-blue-600' : 'text-red-600'} uppercase">
+                                        ${isWater ? '💧 Water Meter' : '🧯 Sprinkler'}
+                                    </span>
+                                </div>
+                                <div class="text-sm font-semibold text-gray-800 leading-tight mb-1">${d.address}</div>
+                                <div class="text-[11px] text-gray-500 mb-2">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</div>
+                                ${d.damage === 'Yes' ? '<div class="bg-red-50 text-red-700 text-[10px] px-2 py-1 rounded border border-red-100 font-bold inline-block mb-2">⚠️ REPORTED DAMAGE</div>' : ''}
+                                ${d.notes ? `<div class="bg-gray-50 p-2 rounded text-[11px] text-gray-600 italic border border-gray-100">"${d.notes}"</div>` : ''}
+                            </div>`;
+                        marker.bindPopup(popupContent, { closeButton: false, className: 'shadow-xl rounded-lg' });
+                        markersCluster.addLayer(marker);
+                        reportMarkers.set(d._id, marker);
+
+                        const listItem = document.createElement('div');
+                        listItem.className = "p-3 border-b border-gray-700 hover:bg-white/10 cursor-pointer transition-colors group";
+                        listItem.onclick = () => flyToReport(lat, lng, d._id);
+                        listItem.innerHTML = `
+                            <div class="flex items-start gap-3">
+                                <div class="mt-1 w-2 h-2 rounded-full ${isWater ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}"></div>
+                                <div>
+                                    <h4 class="text-white text-sm font-semibold group-hover:text-yellow-400 transition-colors">${d.address}</h4>
+                                    <p class="text-[10px] text-gray-400 uppercase tracking-wider">${d.dateTime ? d.dateTime.split('T')[0] : 'No Date'}</p>
+                                    ${d.damage === 'Yes' ? '<span class="text-[9px] text-red-400 font-bold uppercase tracking-widest mt-1 block">⚠️ Damage</span>' : ''}
+                                </div>
+                            </div>`;
+                        listContainer.appendChild(listItem);
                     }
                 });
                 
-                document.getElementById('count').innerText = `${allReports.length} Reports`;
+                const countEl = document.getElementById('count');
+                countEl.style.transform = "scale(1.2)";
+                setTimeout(() => countEl.style.transform = "scale(1)", 200);
+                countEl.innerText = `${allReports.length} Active Reports`;
+                document.getElementById('status-indicator').classList.remove('bg-yellow-400');
+                document.getElementById('status-indicator').classList.add('bg-green-500');
+                document.getElementById('status-text').innerText = "System Online";
             }, (error) => {
                 console.error("DB Error:", error);
+                document.getElementById('status-indicator').classList.add('bg-red-500');
             });
         }
 
-        // --- UPDATED CSV EXPORT FUNCTION ---
         window.exportToCSV = function() {
             if (allReports.length === 0) { alert("No data."); return; }
-            
-            // Header row
             const headers = ["Type", "Address", "Date", "Lat", "Lon", "Street", "20ft", "Beyond", "Damage", "Notes"];
             const rows = [headers];
-
-            // Helper to clean data for CSV (handles quotes and commas)
             const clean = (val) => {
                 if (val === null || val === undefined) return '';
                 const str = String(val);
-                // If contains quote, comma or newline, wrap in quotes and double internal quotes
-                if (str.includes('"') || str.includes(',') || str.includes('\n')) {
-                    return `"${str.replace(/"/g, '""')}"`;
-                }
+                if (str.includes('"') || str.includes(',') || str.includes('\n')) return `"${str.replace(/"/g, '""')}"`;
                 return str;
             };
-
             allReports.forEach(r => {
                 let lat = "N/A", lng = "N/A";
                 if (r.gps && r.gps.includes(',')) [lat, lng] = r.gps.split(',');
-
-                rows.push([
-                    clean(r.systemType),
-                    clean(r.address),
-                    clean(r.dateTime),
-                    lat,
-                    lng,
-                    clean(r.locStreet),
-                    clean(r.loc20),
-                    clean(r.locBeyond),
-                    clean(r.damage),
-                    clean(r.notes)
-                ]);
+                rows.push([clean(r.systemType), clean(r.address), clean(r.dateTime), lat, lng, clean(r.locStreet), clean(r.loc20), clean(r.locBeyond), clean(r.damage), clean(r.notes)]);
             });
-
-            // Join rows with newlines, and columns with commas
             let csvContent = rows.map(e => e.join(",")).join("\n");
-
-            // Create a Blob with UTF-8 BOM so Excel opens emojis/symbols correctly
             const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            
-            // Create a download link using URL API (no length limit)
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
@@ -232,41 +371,24 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(url); // Clean up memory
+            URL.revokeObjectURL(url);
         }
 
-        // ──────── CLEAR ALL DATA LOGIC ────────
         window.nukeDatabasePrompt = function() {
             const n = allReports.length;
             if (n === 0) return alert('Database is already empty.');
-
-            const pw = prompt(`⚠ ADMIN OVERRIDE ⚠\n\nYou are about to DELETE ALL ${n} reports.\nThis cannot be undone.\n\nA CSV backup will be downloaded automatically.\n\nEnter Admin Password to confirm:`);
-            
-            if (pw !== "FDADMIN") {
-                if (pw !== null) alert("Incorrect Password. Action cancelled.");
-                return;
-            }
-
-            if (!confirm(`Are you absolutely sure? \n\n${n} records will be permanently deleted.`)) return;
-
-            // 1. Download Backup
+            const pw = prompt(`⚠ ADMIN OVERRIDE ⚠\n\nYou are about to DELETE ALL ${n} reports.\nThis cannot be undone.\n\nEnter Admin Password to confirm:`);
+            if (pw !== "FDADMIN") return alert("Action cancelled.");
+            if (!confirm(`Are you absolutely sure?`)) return;
             exportToCSV();
-
-            // 2. Delete Data
             setTimeout(async () => {
                 try {
                     document.getElementById('count').innerText = 'Deleting...';
-                    
                     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
                     const snapshot = await getDocs(q);
                     const batch = writeBatch(db);
-                    
-                    snapshot.docs.forEach((doc) => {
-                        batch.delete(doc.ref);
-                    });
-
+                    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
                     await batch.commit();
-                    
                     alert(`Success: ${n} reports deleted.`);
                 } catch (e) {
                     console.error("Delete Error:", e);
@@ -275,71 +397,141 @@
             }, 1000); 
         };
     </script>
-    <style>
-        .hero-bg { background-color: #152a40; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'); }
-        .leaflet-pane { z-index: 0 !important; }
-        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #152a40; z-index: 9999; display: flex; align-items: center; justify-content: center; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'); }
-    </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col overflow-hidden relative">
 
     <!-- LOGIN SCREEN -->
-    <div id="login-overlay">
-        <div class="bg-white p-8 rounded-lg shadow-2xl max-w-md w-full text-center mx-4">
-            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-20 mx-auto mb-6">
-            <h2 class="text-2xl font-black text-navy mb-1 uppercase">Admin Access</h2>
-            <p class="text-gray-500 text-sm mb-6">Denton Fire Dept. Internal Dashboard</p>
-            <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="Enter Password" class="w-full border-2 border-gray-300 rounded p-3 text-lg mb-4 focus:border-navy focus:outline-none text-center tracking-widest">
-            <p id="login-error" class="text-red font-bold text-sm mb-4 hidden">Incorrect Password</p>
-            <button id="login-btn" onclick="checkLogin()" class="w-full bg-navy text-white font-bold py-3 rounded hover:bg-gray-800 transition">Login</button>
-            <p class="mt-6 text-xs text-gray-400">Authorized Personnel Only</p>
+    <div id="login-overlay" class="fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-500 px-4">
+        <div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
+            <!-- ACTIVE SCANNING LINE ANIMATION -->
+            <div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div>
+            
+            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-16 w-auto mx-auto mb-4 drop-shadow-lg object-contain">
+            
+            <h2 class="text-2xl font-black text-white mb-1 uppercase tracking-tight">Admin Portal</h2>
+            <p class="text-blue-200 text-xs mb-6 font-medium tracking-wide uppercase">Water Shutoff Command</p>
+            
+            <div class="space-y-4">
+                <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="ACCESS CODE" 
+                    class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-[0.2em] focus:outline-none focus:ring-2 focus:ring-yellow transition-all shadow-inner text-sm">
+                
+                <p id="login-error" class="text-red-400 font-bold text-xs hidden bg-red-900/30 py-1 rounded border border-red-500/30">Invalid Access Code</p>
+                
+                <button id="login-btn" onclick="checkLogin()" 
+                    class="w-full bg-white text-navy font-black py-3 rounded-lg hover:bg-gray-100 active:scale-95 transition-all shadow-lg uppercase tracking-wider text-xs">
+                    Authenticate
+                </button>
+            </div>
+            
+            <!-- DYNAMIC SECURITY BADGE -->
+            <div id="security-badge" class="mt-6 flex items-center justify-center gap-2 opacity-60">
+                <div id="secure-light" class="w-2 h-2 rounded-full transition-colors duration-500"></div>
+                <p id="secure-text" class="text-[10px] font-mono tracking-widest transition-colors duration-500">CHECKING SECURITY...</p>
+            </div>
         </div>
     </div>
 
     <!-- MAIN DASHBOARD -->
-    <div id="dashboard-view" class="hidden flex flex-col h-full">
-        <div class="hero-bg text-white py-6 px-4 text-center shrink-0 shadow-lg relative z-20">
-            <div class="flex items-center justify-center gap-4">
-                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-12 drop-shadow-lg">
-                <div class="text-left">
-                    <h1 class="text-xl font-black uppercase tracking-wide leading-none">Water Shutoff</h1>
-                    <p class="text-yellow text-xs font-bold tracking-widest">COMMAND DASHBOARD</p>
+    <div id="dashboard-view" class="hidden absolute inset-0 flex">
+
+        <!-- SIDEBAR -->
+        <div id="list-sidebar" class="absolute inset-y-0 left-0 w-80 glass-dark z-[60] transform -translate-x-full transition-transform duration-300 shadow-2xl flex flex-col border-r border-white/10">
+            <div class="p-4 border-b border-white/10 flex items-center justify-between">
+                <span class="text-white font-black uppercase tracking-wider text-sm">Active Reports</span>
+                <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="report-list" class="flex-1 overflow-y-auto">
+                <div class="p-4 text-center text-gray-500 text-xs italic">Loading data...</div>
+            </div>
+            <div class="p-3 border-t border-white/10 bg-navy-light/50">
+                <p class="text-[10px] text-gray-400 text-center">Select an item to view on map</p>
+            </div>
+        </div>
+        
+        <!-- MAP AREA -->
+        <div class="relative flex-1 h-full w-full">
+            <div id="map" class="absolute inset-0 z-0 bg-gray-200"></div>
+
+            <!-- FLOATING CONTROLS -->
+            <div class="absolute top-0 left-0 w-full z-50 pointer-events-none p-4 flex flex-col gap-4">
+                
+                <!-- Header -->
+                <div class="pointer-events-auto glass-panel rounded-xl shadow-floating p-4 flex flex-wrap md:flex-nowrap items-center justify-between gap-4">
+                    
+                    <div class="flex items-center gap-4">
+                        <button onclick="toggleSidebar()" class="md:hidden bg-navy text-white p-2 rounded-lg shadow hover:bg-navy-light">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        </button>
+
+                        <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire Patch" class="h-12 w-auto drop-shadow-sm">
+                        <div>
+                            <h1 class="text-navy font-black uppercase text-lg leading-none tracking-tight">Water Shutoff</h1>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span id="status-indicator" class="w-2 h-2 rounded-full bg-yellow-400 shadow-sm animate-pulse"></span>
+                                <p id="status-text" class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Connecting...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Stats -->
+                    <div class="hidden md:flex gap-6 items-center px-6 border-l border-r border-gray-100">
+                        <div class="text-center">
+                            <span id="count" class="block text-2xl font-black text-navy leading-none transition-all duration-300">--</span>
+                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Total Reports</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <div class="flex flex-col items-center">
+                                <div class="w-3 h-3 rounded-full bg-blue-600 border border-white shadow-sm mb-1"></div>
+                                <span class="text-[9px] font-bold text-gray-400">METER</span>
+                            </div>
+                            <div class="flex flex-col items-center">
+                                <div class="w-3 h-3 rounded-sm bg-red-600 border border-white shadow-sm mb-1"></div>
+                                <span class="text-[9px] font-bold text-gray-400">SYSTEM</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                        <button onclick="toggleSidebar()" class="hidden md:flex bg-white hover:bg-gray-50 text-navy font-bold text-xs py-2.5 px-4 rounded-lg border border-gray-200 shadow-sm transition-all items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+                            List View
+                        </button>
+
+                        <a href="water_shutoff.html" class="bg-navy hover:bg-navy-light text-white text-xs font-bold py-2.5 px-5 rounded-lg transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            New Report
+                        </a>
+                        
+                        <button onclick="performLogout()" class="bg-white hover:bg-gray-50 text-gray-500 hover:text-red-600 border border-gray-200 p-2.5 rounded-lg transition-all shadow-sm" title="Secure Logout">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FLOATING BOTTOM BAR -->
+            <div class="absolute bottom-8 left-0 w-full z-40 pointer-events-none flex justify-center">
+                <div class="pointer-events-auto glass-panel rounded-full px-2 py-2 shadow-floating flex items-center gap-1 scale-90 md:scale-100 origin-bottom">
+                    <button onclick="exportToCSV()" class="group relative flex items-center gap-2 px-4 py-2 rounded-full hover:bg-green-50 text-gray-600 hover:text-green-700 transition-all font-bold text-xs">
+                        <span class="bg-green-100 text-green-700 p-1.5 rounded-full group-hover:bg-green-600 group-hover:text-white transition-colors">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        </span>
+                        <span class="hidden md:inline">Download CSV</span>
+                    </button>
+                    <div class="w-px h-6 bg-gray-200 mx-1"></div>
+                    <button onclick="nukeDatabasePrompt()" class="group relative flex items-center gap-2 px-4 py-2 rounded-full hover:bg-red-50 text-gray-600 hover:text-red-600 transition-all font-bold text-xs">
+                        <span class="bg-gray-100 text-gray-500 p-1.5 rounded-full group-hover:bg-red-600 group-hover:text-white transition-colors">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </span>
+                        <span class="hidden md:inline">Purge Data</span>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white border-b border-gray-200 p-3 shadow-md z-10 shrink-0 relative">
-            <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
-                <div class="flex items-center gap-2 w-full md:w-auto">
-                    <a href="water_shutoff.html" class="bg-navy text-white text-sm font-bold py-2 px-6 rounded-lg hover:bg-gray-800 transition shadow-sm text-center flex items-center gap-2">
-                        <span>+</span> New Submission
-                    </a>
-                </div>
-
-                <div class="flex gap-4 text-xs font-bold text-gray-600 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
-                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-full bg-blue-600 border border-white shadow flex items-center justify-center text-white text-[9px]">W</div> Water</div>
-                    <div class="flex items-center gap-2"><div class="w-4 h-4 rounded-sm bg-red-600 border border-white shadow flex items-center justify-center text-white text-[9px]">S</div> Sprinkler</div>
-                </div>
-
-                <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-                    <span id="count" class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">Connecting...</span>
-                    
-                    <button onclick="exportToCSV()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded transition shadow-sm flex items-center gap-1">
-                        <span>📄</span> CSV
-                    </button>
-                    
-                    <button onclick="nukeDatabasePrompt()" class="bg-red hover:opacity-90 text-white text-xs font-bold py-2 px-4 rounded transition shadow-sm flex items-center gap-1 whitespace-nowrap">
-                        <span>⚠️</span> CLEAR DATA
-                    </button>
-
-                    <button onclick="performLogout()" class="text-gray-400 hover:text-red-500 text-xs font-bold px-2 py-2 rounded transition" title="Logout">
-                        LOGOUT
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div id="map" class="flex-grow w-full z-0 bg-gray-200 relative"></div>
     </div>
 </body>
 </html>
