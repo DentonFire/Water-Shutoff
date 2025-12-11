@@ -52,11 +52,84 @@
             currentUser = user; 
         });
 
-        // Auto-fill Date/Time on Load
+        // --- UNIT MANAGEMENT LOGIC ---
+        const defaultUnits = [
+            "BAT1", "BAT2", "RIV9", 
+            "E1", "T1", "E2", "E3", "E4", "E6", "Q5", "E7", "E8", 
+            "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", 
+            "R1", "BLK3"
+        ];
+
+        window.loadUnits = function() {
+            const select = document.getElementById('unit-select');
+            // Clear current options except the placeholder and "Add New"
+            select.innerHTML = `<option value="">Select Unit...</option>`;
+            
+            // 1. Add Defaults
+            defaultUnits.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u;
+                opt.innerText = u;
+                select.appendChild(opt);
+            });
+
+            // 2. Add Saved Custom Units from Local Storage
+            const savedUnits = JSON.parse(localStorage.getItem('denton_custom_units') || '[]');
+            if (savedUnits.length > 0) {
+                const divider = document.createElement('option');
+                divider.disabled = true;
+                divider.innerText = "--- Saved Units ---";
+                select.appendChild(divider);
+
+                savedUnits.forEach(u => {
+                    // Avoid duplicates if they added a standard one
+                    if (!defaultUnits.includes(u)) {
+                        const opt = document.createElement('option');
+                        opt.value = u;
+                        opt.innerText = u;
+                        select.appendChild(opt);
+                    }
+                });
+            }
+
+            // 3. Add "Create New" Option
+            const addNew = document.createElement('option');
+            addNew.value = "ADD_NEW";
+            addNew.innerText = "➕ Add New Unit...";
+            addNew.className = "font-bold text-navy";
+            select.appendChild(addNew);
+        }
+
+        window.handleUnitChange = function() {
+            const select = document.getElementById('unit-select');
+            const customInputDiv = document.getElementById('custom-unit-div');
+            
+            if (select.value === 'ADD_NEW') {
+                customInputDiv.classList.remove('hidden');
+                document.getElementById('custom-unit-input').focus();
+            } else {
+                customInputDiv.classList.add('hidden');
+            }
+        }
+
+        window.saveNewUnit = function(newUnitName) {
+            if (!newUnitName) return;
+            const savedUnits = JSON.parse(localStorage.getItem('denton_custom_units') || '[]');
+            
+            // Only save if unique
+            if (!savedUnits.includes(newUnitName) && !defaultUnits.includes(newUnitName)) {
+                savedUnits.push(newUnitName);
+                localStorage.setItem('denton_custom_units', JSON.stringify(savedUnits));
+            }
+        }
+
+        // Auto-fill Date/Time & Units on Load
         window.addEventListener('DOMContentLoaded', () => {
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             document.getElementById('datetime').value = now.toISOString().slice(0, 16);
+            
+            loadUnits();
         });
 
         // --- SUBMIT LOGIC ---
@@ -83,8 +156,23 @@
             const loc20 = document.getElementById('loc-20ft').value;
             const locBeyond = document.getElementById('loc-beyond').value;
 
+            // Unit Logic
+            const unitSelect = document.getElementById('unit-select');
+            let unitVal = unitSelect.value;
+            
+            if (unitVal === 'ADD_NEW') {
+                const customInput = document.getElementById('custom-unit-input').value;
+                if (customInput && customInput.trim() !== "") {
+                    unitVal = customInput.trim().toUpperCase(); // Normalize
+                    saveNewUnit(unitVal); // Save to memory
+                } else {
+                    unitVal = null; // Error case
+                }
+            }
+
             // 2. Validate
             const missingFields = [];
+            if (!unitVal) missingFields.push("Unit Number");
             if (!address || !address.trim()) missingFields.push("Shutoff Address");
             if (!systemType) missingFields.push("System Type");
             if (!dateTime) missingFields.push("Date/Time");
@@ -104,17 +192,16 @@
             // 3. Process
             try {
                 // Determine values for location fields based on system type
-                // Use explicit "N/A" strings to ensure CSV columns are never empty/null
                 const isWaterMeter = (systemType === 'Water Meter');
                 
                 const reportData = {
+                    unit: unitVal, // Added Unit
                     address: address,
                     dateTime: dateTime,
                     systemType: systemType,
                     gps: gps || "", 
                     damage: damage,
                     notes: notes || "", 
-                    // Force string values for consistent CSV export
                     locStreet: isWaterMeter ? locStreet : "N/A",
                     loc20: isWaterMeter ? loc20 : "N/A",
                     locBeyond: isWaterMeter ? locBeyond : "N/A",
@@ -135,7 +222,11 @@
                 document.getElementById('shutoffForm').reset();
                 document.getElementById('location-details').classList.add('hidden');
                 document.getElementById('damage-details').classList.add('hidden');
+                document.getElementById('custom-unit-div').classList.add('hidden'); // Hide custom input
                 
+                // Reload units to show newly added ones immediately if any
+                loadUnits();
+
                 const now = new Date();
                 now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
                 document.getElementById('datetime').value = now.toISOString().slice(0, 16);
@@ -143,9 +234,9 @@
             } catch (e) {
                 console.error("Submit Error:", e);
                 alert("Database error (" + e.message + "). Opening email fallback.");
-                // Attempt fallback email even if DB fails
                 try {
                     const fallbackData = {
+                        unit: unitVal || "Unknown",
                         address: address || "Unknown",
                         systemType: systemType || "Unknown",
                         dateTime: dateTime || "Unknown",
@@ -165,10 +256,9 @@
         function generateEmail(data) {
             let recipient, subject, locationBlock;
             
-            // UPDATED EMAIL ADDRESS
             if (data.systemType === "Water Meter") {
                 recipient = "watermetering@cityofdenton.com";
-                subject = "Water Meter Shutoff";
+                subject = `Water Meter Shutoff - Unit ${data.unit}`;
                 locationBlock = `LOCATION DETAILS
 --------------------------------
 At Street: ${data.locStreet || 'N/A'}
@@ -176,7 +266,7 @@ Within 20ft: ${data.loc20 || 'N/A'}
 Beyond 20ft: ${data.locBeyond || 'N/A'}`;
             } else {
                 recipient = "FirePrevention@cityofdenton.com";
-                subject = "Sprinkler System Shutoff";
+                subject = `Sprinkler System Shutoff - Unit ${data.unit}`;
                 locationBlock = ""; 
             }
 
@@ -190,6 +280,7 @@ Beyond 20ft: ${data.locBeyond || 'N/A'}`;
             const body = 
 `SHUTOFF REPORT
 --------------------------------
+UNIT: ${data.unit || 'N/A'}
 TYPE: ${data.systemType || 'N/A'}
 ADDRESS: ${data.address || 'N/A'}
 DATE/TIME: ${(data.dateTime || '').replace('T', ' ')}
@@ -372,9 +463,28 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
         </div>
 
         <form id="shutoffForm" class="space-y-8">
-            <!-- Location -->
+            
+            <!-- 1. Unit Selection (NEW) -->
             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">1. Location & Time</h2>
+                <h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">1. Unit Identification</h2>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Select Unit <span class="text-red">*</span></label>
+                    <select id="unit-select" onchange="handleUnitChange()" class="w-full border border-gray-300 rounded p-2 focus:border-navy outline-none bg-white font-bold text-navy">
+                        <!-- Populated by JS -->
+                    </select>
+                    
+                    <!-- Hidden Custom Input -->
+                    <div id="custom-unit-div" class="hidden mt-3 animate-fade-in">
+                        <label class="block text-xs font-bold text-blue-600 uppercase mb-1">Enter New Unit Name:</label>
+                        <input type="text" id="custom-unit-input" class="w-full border-2 border-blue-300 rounded p-2 focus:border-blue-600 outline-none uppercase placeholder-gray-400" placeholder="Ex: E9, SQ1, etc.">
+                        <p class="text-[10px] text-gray-500 mt-1">This unit will be saved to your list for future use.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Location & Time (Renumbered) -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">2. Location & Time</h2>
                 <div class="space-y-4">
                     <div id="address-container" class="relative">
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Shutoff Address <span class="text-red">*</span></label>
@@ -382,7 +492,6 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                         <div id="address-results" class="absolute z-10 w-full bg-white border border-gray-300 rounded-b shadow-lg hidden mt-0 max-h-60 overflow-y-auto"></div>
                     </div>
                     
-                    <!-- UPDATED SPACING: Vertical stack on mobile, side-by-side on desktop -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Date/Time <span class="text-red">*</span></label>
@@ -398,9 +507,9 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                 </div>
             </div>
 
-            <!-- System Type -->
+            <!-- 3. System Type (Renumbered) -->
             <div>
-                <h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">2. System Information</h2>
+                <h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">3. System Information</h2>
                 <label class="block text-sm font-bold text-gray-700 mb-3">Which system was shut off? <span class="text-red">*</span></label>
                 <div class="grid grid-cols-2 gap-4">
                     <label class="cursor-pointer">
@@ -433,9 +542,9 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
                 </div>
             </div>
 
-            <!-- Damage -->
+            <!-- 4. Damage (Renumbered) -->
             <div>
-                <h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">3. Damage Report</h2>
+                <h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">4. Damage Report</h2>
                 <div class="mb-4">
                     <span class="block text-sm font-bold text-gray-700 mb-2">Was the system damaged?</span>
                     <div class="flex gap-6">
