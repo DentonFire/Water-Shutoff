@@ -263,13 +263,20 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
         }
 
         // --- UI HELPERS ---
-        window.openQRModal = function() {
-            const qrImg = document.getElementById('qr-image');
-            const targetUrl = "https://dentonfire.github.io/Water-Shutoff/water_shutoff.html";
-            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(targetUrl)}`;
-            document.getElementById('qr-modal').classList.remove('hidden');
+        window.toggleQrModal = function() {
+            const modal = document.getElementById('qr-modal');
+            const qrImage = document.getElementById('qr-image');
+            
+            // Toggle visibility
+            modal.classList.toggle('hidden');
+
+            // Generate the QR code only if we are opening it
+            if (!modal.classList.contains('hidden')) {
+                const targetUrl = 'https://dentonfire.github.io/Water-Shutoff/water_shutoff.html';
+                qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(targetUrl)}`;
+            }
         }
-        window.closeQRModal = function() { document.getElementById('qr-modal').classList.add('hidden'); }
+        
         window.closeFireWatchModal = function() { document.getElementById('firewatch-modal').classList.add('hidden'); }
 
         window.getGPS = function() {
@@ -364,18 +371,14 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
         #address-results::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .modal-fade-in { animation: fadeIn 0.2s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        /* QR Modal Animation */
+        .fade-in { animation: fadeIn 0.2s ease-out; }
     </style>
 </head>
-<body>
+<body class="relative">
 
     <div class="paper-doc">
-        <!-- HEADER UTILITY BAR -->
-        <div class="absolute top-4 right-4 flex gap-2">
-            <!-- Fire Watch Link MOVED from here -->
-            <button onclick="openQRModal()" class="bg-gray-100 text-navy p-3 rounded shadow hover:bg-gray-200" title="Share Survey via QR">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 6h6v6H6V6zm12 0h-6v6h6V6zm-6 12H6v-6h6v6z"></path></svg>
-            </button>
-        </div>
+        <!-- REMOVED HEADER UTILITY BAR -->
 
         <div class="text-center border-b-4 border-yellow pb-6 mb-6 mt-4">
             <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-20 mx-auto mb-3">
@@ -477,16 +480,56 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
         </form>
     </div>
 
-    <!-- MODAL: QR CODE -->
-    <div id="qr-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 hidden backdrop-blur-sm" onclick="closeQRModal()">
-        <div class="bg-white p-6 rounded-lg shadow-2xl max-w-sm w-full mx-4 text-center modal-fade-in" onclick="event.stopPropagation()">
-            <h3 class="text-navy font-bold text-lg mb-2">Scan to Share Survey</h3>
-            <div class="bg-white p-2 rounded border inline-block">
-                <img id="qr-image" src="" alt="QR Code" class="w-48 h-48">
+    <!-- ============================================ -->
+    <!-- NEW FLOATING QR CODE BUTTON & MODAL START -->
+    <!-- ============================================ -->
+
+    <!-- The Floating Button -->
+    <div class="fixed bottom-6 right-6 z-50">
+        <button onclick="toggleQrModal()" 
+                class="bg-navy/90 hover:bg-navy text-white rounded-full w-14 h-14 md:w-16 md:h-16 flex items-center justify-center shadow-2xl border-2 border-white/20 transition-all hover:scale-110 backdrop-blur-sm group">
+            <!-- QR Icon SVG -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 md:w-8 md:h-8 group-hover:stroke-yellow transition-colors">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
+            </svg>
+        </button>
+    </div>
+
+    <!-- The Modal (Hidden by Default) -->
+    <div id="qr-modal" class="fixed inset-0 z-[60] hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-navy/80 backdrop-blur-sm transition-opacity" onclick="toggleQrModal()"></div>
+
+        <!-- Modal Panel -->
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+                <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-sm fade-in">
+                    <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4 text-center">
+                        <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-navy/10 sm:mx-auto mb-4">
+                            <svg class="h-6 w-6 text-navy" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
+                            </svg>
+                        </div>
+                        <h3 class="text-base font-semibold leading-6 text-gray-900 mb-2">Scan for Mobile Access</h3>
+                        <p class="text-sm text-gray-500 mb-4">Scan this code to open this resource on your mobile device.</p>
+                        
+                        <!-- Generated QR Code Image -->
+                        <div class="flex justify-center p-2 border border-gray-100 rounded bg-gray-50">
+                            <img id="qr-image" src="" alt="QR Code" class="w-48 h-48 mix-blend-multiply">
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                        <button type="button" onclick="toggleQrModal()" class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">Close</button>
+                    </div>
+                </div>
             </div>
-            <button onclick="closeQRModal()" class="block w-full mt-4 text-gray-500 text-sm hover:text-navy">Close</button>
         </div>
     </div>
+    <!-- ============================================ -->
+    <!-- NEW FLOATING QR CODE BUTTON & MODAL END -->
+    <!-- ============================================ -->
 
     <!-- MODAL: FIRE WATCH REMINDER -->
     <div id="firewatch-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-navy/90 hidden backdrop-blur-sm">
