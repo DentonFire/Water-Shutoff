@@ -16,6 +16,9 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -47,7 +50,6 @@
         }
     </script>
     
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
 
     <style>
@@ -55,19 +57,22 @@
         .glass-panel { background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.5); }
         .glass-dark { background: rgba(21, 42, 64, 0.95); backdrop-filter: blur(12px); border-right: 1px solid rgba(255, 255, 255, 0.1); }
         ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        
+        #login-overlay { 
+            background-color: #152a40; 
+            background-image: url('https://www.transparenttextures.com/patterns/cubes.png'), radial-gradient(circle at top right, #1e3a58, #152a40);
+            background-repeat: repeat, no-repeat;
+        }
+
         .leaflet-pane { z-index: 0 !important; }
-        .leaflet-control-zoom { border: none !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }
-        .leaflet-bar a { border-radius: 8px !important; width: 36px !important; height: 36px !important; line-height: 36px !important; color: #152a40 !important; margin-bottom: 6px !important; border: none !important; }
-        #login-overlay { background-color: #152a40; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'), radial-gradient(circle at top right, #1e3a58, #152a40); background-repeat: repeat, no-repeat; }
         @keyframes pulse-ring { 0% { transform: scale(0.33); opacity: 1; } 80%, 100% { opacity: 0; } }
         .marker-pulse { position: relative; }
         .marker-pulse::before { content: ''; position: absolute; left: 50%; top: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid white; animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
-        .marker-cluster-custom { background: rgba(21, 42, 64, 0.9); border: 2px solid rgba(255, 255, 255, 0.8); color: white; border-radius: 50%; text-align: center; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: 'Inter', sans-serif; }
-        .scan-line-gradient { background: linear-gradient(90deg, #152a40 0%, #ef4444 50%, #152a40 100%); background-size: 200% 100%; }
+        .marker-cluster-custom { background: rgba(21, 42, 64, 0.9); border: 2px solid rgba(255, 255, 255, 0.8); color: white; border-radius: 50%; text-align: center; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
         
-        /* Toggle Switch Styling */
+        .scan-line-gradient { background: linear-gradient(90deg, #152a40 0%, #ef4444 50%, #152a40 100%); background-size: 200% 100%; }
+
         .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
@@ -101,6 +106,8 @@
         let reportMarkers = new Map(); 
         let viewHistorical = false;
         let currentReportId = null;
+        let updateMode = 'resolved';
+        let charts = {};
 
         window.addEventListener('DOMContentLoaded', () => {
             const session = localStorage.getItem('denton_admin_session');
@@ -111,26 +118,27 @@
             const isSecure = window.location.protocol === 'https:';
             const statusLight = document.getElementById('secure-light');
             const statusText = document.getElementById('secure-text');
-            if (isSecure) {
-                statusLight.classList.add('bg-green-500', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
-                statusText.innerText = "SECURE CONNECTION // DFD-INT";
-                statusText.classList.add('text-blue-200');
-            } else {
-                statusLight.classList.add('bg-red-500', 'animate-pulse', 'shadow-[0_0_8px_rgba(239,68,68,0.6)]');
-                statusText.innerText = "UNENCRYPTED // LOCALHOST";
-                statusText.classList.add('text-red-300');
+            if (statusLight && statusText) {
+                if (isSecure) {
+                    statusLight.classList.add('bg-green-500', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
+                    statusText.innerText = "SECURE CONNECTION // DFD-INT";
+                } else {
+                    statusLight.classList.add('bg-red-500', 'animate-pulse');
+                    statusText.innerText = "UNENCRYPTED // LOCALHOST";
+                    statusText.classList.add('text-red-300');
+                }
             }
         });
 
         window.checkLogin = function() {
-            const pass = document.getElementById('admin-pass').value;
-            if (pass === "FDADMIN") {
+            const passInput = document.getElementById('admin-pass');
+            if (passInput.value === "FDADMIN") {
                 document.getElementById('login-btn').innerText = "Connecting...";
                 localStorage.setItem('denton_admin_session', 'active');
                 setTimeout(() => { showDashboard(); connectFirebase(); }, 800);
             } else {
                 document.getElementById('login-error').classList.remove('hidden');
-                document.getElementById('admin-pass').value = '';
+                passInput.value = '';
             }
         }
 
@@ -143,13 +151,9 @@
         window.handleEnter = function(e) { if (e.key === 'Enter') window.checkLogin(); }
 
         function showDashboard() {
-            const overlay = document.getElementById('login-overlay');
-            overlay.style.opacity = '0';
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                document.getElementById('dashboard-view').classList.remove('hidden');
-                if (map) map.invalidateSize();
-            }, 500);
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('dashboard-view').classList.remove('hidden');
+            setTimeout(() => { if(map) map.invalidateSize(); }, 500);
         }
 
         window.toggleSidebar = function() {
@@ -161,54 +165,28 @@
             renderData();
         }
 
-        window.flyToReport = function(lat, lng, reportId) {
-            if (window.innerWidth < 768) document.getElementById('list-sidebar').classList.add('-translate-x-full');
-            map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
-            const marker = reportMarkers.get(reportId);
-            if (marker) markersCluster.zoomToShowLayer(marker, () => marker.openPopup());
-        }
+        window.switchView = function(viewName) {
+            const mapArea = document.getElementById('map-container');
+            const analyticsArea = document.getElementById('analytics-container');
+            const mapBtn = document.getElementById('nav-map');
+            const anBtn = document.getElementById('nav-analytics');
 
-        // --- NEW: RESOLUTION MODAL LOGIC ---
-        window.resolveReport = function(reportId) {
-            currentReportId = reportId;
-            const report = allReports.find(r => r._id === reportId);
-            document.getElementById('modal-address').innerText = report ? report.address : 'Unknown Address';
-            document.getElementById('resolve-modal').classList.remove('hidden');
-            document.getElementById('tech-name').value = '';
-            document.getElementById('res-notes').value = '';
-        }
-
-        window.closeModal = function() {
-            document.getElementById('resolve-modal').classList.add('hidden');
-            currentReportId = null;
-        }
-
-        window.submitUpdate = async function(isFinal) {
-            const techName = document.getElementById('tech-name').value.trim();
-            const notes = document.getElementById('res-notes').value.trim();
-
-            if (!techName) {
-                alert("Please enter Technician Last Name.");
-                return;
-            }
-
-            try {
-                const reportRef = doc(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs', currentReportId);
-                const updatePayload = {
-                    lastTechnician: techName,
-                    resolutionNotes: notes,
-                    updatedAt: new Date().toISOString()
-                };
-
-                if (isFinal) {
-                    updatePayload.status = 'resolved';
-                    updatePayload.resolvedAt = new Date().toISOString();
-                }
-
-                await updateDoc(reportRef, updatePayload);
-                closeModal();
-            } catch (e) {
-                alert("Error updating status: " + e.message);
+            if (viewName === 'analytics') {
+                mapArea.classList.add('hidden');
+                analyticsArea.classList.remove('hidden');
+                anBtn.classList.add('bg-navy', 'text-white');
+                anBtn.classList.remove('text-navy');
+                mapBtn.classList.remove('bg-navy', 'text-white');
+                mapBtn.classList.add('text-navy');
+                updateAnalytics();
+            } else {
+                analyticsArea.classList.add('hidden');
+                mapArea.classList.remove('hidden');
+                mapBtn.classList.add('bg-navy', 'text-white');
+                mapBtn.classList.remove('text-navy');
+                anBtn.classList.remove('bg-navy', 'text-white');
+                anBtn.classList.add('text-navy');
+                if(map) map.invalidateSize();
             }
         }
 
@@ -216,7 +194,7 @@
             signInAnonymously(auth).then(() => {
                 initMap();
                 listenToData();
-            }).catch(e => alert("Connection Failed: " + e.message));
+            });
         }
 
         function initMap() {
@@ -227,9 +205,7 @@
             }).addTo(map);
             L.control.zoom({ position: 'bottomright' }).addTo(map);
             markersCluster = L.markerClusterGroup({
-                iconCreateFunction: function(cluster) {
-                    return L.divIcon({ html: '<div><span>' + cluster.getChildCount() + '</span></div>', className: 'marker-cluster-custom', iconSize: L.point(40, 40) });
-                },
+                iconCreateFunction: (cluster) => L.divIcon({ html: `<div><span>${cluster.getChildCount()}</span></div>`, className: 'marker-cluster-custom', iconSize: L.point(40, 40) }),
                 showCoverageOnHover: false, maxClusterRadius: 40
             });
             map.addLayer(markersCluster);
@@ -238,14 +214,9 @@
         function listenToData() {
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs');
             onSnapshot(q, (snapshot) => {
-                allReports = [];
-                snapshot.forEach((doc) => {
-                    const d = doc.data();
-                    d._id = doc.id;
-                    allReports.push(d);
-                });
+                allReports = snapshot.docs.map(doc => ({ ...doc.data(), _id: doc.id }));
                 renderData();
-                
+                updateAnalytics();
                 document.getElementById('status-indicator').className = "w-2 h-2 rounded-full bg-green-500 shadow-sm";
                 document.getElementById('status-text').innerText = "System Online";
             });
@@ -277,49 +248,31 @@
                     const popupContent = `
                         <div class="font-sans min-w-[200px]">
                             <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
-                                <span class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Status</span>
+                                <span class="text-[10px] font-bold text-gray-400 uppercase">Status</span>
                                 <span class="text-[10px] font-black uppercase ${isResolved ? 'text-gray-500' : 'text-green-600'}">
                                     ${isResolved ? '✅ Resolved' : '⭕ Active'}
                                 </span>
                             </div>
                             <div class="text-sm font-semibold text-gray-800 leading-tight mb-1">${d.address}</div>
                             <div class="text-[11px] text-gray-500 mb-2">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</div>
-                            
-                            ${d.notes ? `<div class="bg-gray-50 p-2 rounded text-[10px] text-gray-600 italic border border-gray-100 mb-2">Original: "${d.notes}"</div>` : ''}
-                            
-                            ${d.lastTechnician ? `
-                                <div class="bg-blue-50/50 p-2 rounded border border-blue-100 mt-2 mb-2">
-                                    <p class="text-[10px] text-blue-800 font-bold uppercase tracking-wide">Last Update: Tech ${d.lastTechnician}</p>
-                                    ${d.resolutionNotes ? `<p class="text-[11px] text-blue-700 leading-snug mt-1">"${d.resolutionNotes}"</p>` : ''}
-                                </div>
-                            ` : ''}
-
-                            ${!isResolved ? `
-                                <button onclick="resolveReport('${d._id}')" class="w-full bg-navy text-white text-[10px] font-bold py-2.5 rounded shadow hover:bg-navy-light transition-colors uppercase tracking-widest mt-2">
-                                    Update / Resolve
-                                </button>
-                            ` : `<div class="text-[9px] text-gray-400 text-center italic mt-1">Resolved on ${d.resolvedAt ? d.resolvedAt.split('T')[0] : 'N/A'}</div>`}
+                            ${d.lastTechnician ? `<div class="bg-blue-50 p-2 rounded text-[10px] text-blue-800 font-bold mb-2 uppercase">VERIFIED BY: ${d.lastTechnician}</div>` : ''}
+                            ${!isResolved ? `<button onclick="resolveReport('${d._id}')" class="w-full bg-navy text-white text-[10px] font-bold py-2 rounded uppercase tracking-widest mt-2">Update / Resolve</button>` : ''}
                         </div>`;
                     
-                    marker.bindPopup(popupContent, { closeButton: false, className: 'shadow-xl rounded-lg' });
+                    marker.bindPopup(popupContent, { closeButton: false, className: 'shadow-xl' });
                     markersCluster.addLayer(marker);
                     reportMarkers.set(d._id, marker);
 
                     const listItem = document.createElement('div');
-                    listItem.className = `p-3 border-b border-white/10 hover:bg-white/5 cursor-pointer transition-colors group ${isResolved ? 'opacity-50' : ''}`;
+                    listItem.className = `p-3 border-b border-white/10 hover:bg-white/5 cursor-pointer transition-colors ${isResolved ? 'opacity-50' : ''}`;
                     listItem.onclick = () => flyToReport(lat, lng, d._id);
                     listItem.innerHTML = `
                         <div class="flex items-start gap-3">
                             <div class="mt-1 w-2 h-2 rounded-full ${isResolved ? 'bg-gray-500' : (isWater ? 'bg-blue-500' : 'bg-red-500')}"></div>
                             <div class="flex-1">
-                                <h4 class="text-white text-sm font-semibold group-hover:text-yellow-400 transition-colors">${d.address}</h4>
-                                <p class="text-[10px] text-gray-400 uppercase">${d.dateTime ? d.dateTime.split('T')[0] : 'No Date'}</p>
+                                <h4 class="text-white text-sm font-semibold">${d.address}</h4>
+                                <p class="text-[10px] text-gray-400 uppercase">${d.dateTime ? d.dateTime.split('T')[0] : ''}</p>
                             </div>
-                            ${!isResolved ? `
-                                <button onclick="event.stopPropagation(); resolveReport('${d._id}')" class="opacity-0 group-hover:opacity-100 p-1 hover:text-green-400 text-gray-500 transition-all">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                                </button>
-                            ` : ''}
                         </div>`;
                     listContainer.appendChild(listItem);
                 }
@@ -328,180 +281,471 @@
             document.getElementById('count').innerText = allReports.filter(r => r.status !== 'resolved').length;
         }
 
-        window.exportToCSV = function() {
-            if (allReports.length === 0) { alert("No data."); return; }
-            const headers = ["Status", "Type", "Address", "Date", "Last_Tech", "Update_Notes", "Resolved_Date", "Lat", "Lon", "Damage"];
+        function updateAnalytics() {
+            if (allReports.length === 0) return;
+            const activeCount = allReports.filter(r => r.status !== 'resolved').length;
+            const resolvedCount = allReports.filter(r => r.status === 'resolved').length;
+            const damageCount = allReports.filter(r => r.damage === 'Yes').length;
+            const damagePercent = ((damageCount / allReports.length) * 100).toFixed(0);
+
+            if(document.getElementById('stat-active')) document.getElementById('stat-active').innerText = activeCount;
+            if(document.getElementById('stat-resolved')) document.getElementById('stat-resolved').innerText = resolvedCount;
+            if(document.getElementById('stat-damage')) document.getElementById('stat-damage').innerText = damagePercent + '%';
+
+            const waterCount = allReports.filter(r => r.systemType === 'Water Meter').length;
+            const sprinklerCount = allReports.filter(r => r.systemType !== 'Water Meter').length;
+
+            if (charts.dist) charts.dist.destroy();
+            const distCanvas = document.getElementById('chart-dist');
+            if (distCanvas) {
+                charts.dist = new Chart(distCanvas, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Water Meters', 'Sprinklers'],
+                        datasets: [{
+                            data: [waterCount, sprinklerCount],
+                            backgroundColor: ['#2563eb', '#dc2626'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { plugins: { legend: { position: 'bottom' } } }
+                });
+            }
+
+            const last7Days = [...Array(7)].map((_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                return d.toISOString().split('T')[0];
+            }).reverse();
+
+            const timelineData = last7Days.map(date => allReports.filter(r => r.dateTime && r.dateTime.startsWith(date)).length);
+
+            if (charts.timeline) charts.timeline.destroy();
+            const timelineCanvas = document.getElementById('chart-timeline');
+            if (timelineCanvas) {
+                charts.timeline = new Chart(timelineCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: last7Days.map(d => d.split('-').slice(1).join('/')),
+                        datasets: [{
+                            label: 'Incidents',
+                            data: timelineData,
+                            borderColor: '#152a40',
+                            backgroundColor: 'rgba(21, 42, 64, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: { 
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+        }
+
+        window.openCSVModal = () => document.getElementById('csv-modal').classList.remove('hidden');
+        window.closeCSVModal = () => document.getElementById('csv-modal').classList.add('hidden');
+
+        window.processCSVDownload = function() {
+            const statusFilter = document.getElementById('csv-filter-status').value;
+            const typeFilter = document.getElementById('csv-filter-type').value;
+            const timeFilter = document.getElementById('csv-filter-time').value;
+
+            let filtered = [...allReports];
+            if (statusFilter !== 'all') filtered = filtered.filter(r => (statusFilter === 'active' ? r.status !== 'resolved' : r.status === 'resolved'));
+            if (typeFilter !== 'all') filtered = filtered.filter(r => r.systemType === typeFilter);
+
+            if (timeFilter !== 'all') {
+                const now = new Date();
+                const limit = new Date(now.setDate(now.getDate() - parseInt(timeFilter)));
+                filtered = filtered.filter(r => r.dateTime && new Date(r.dateTime) >= limit);
+            }
+
+            if (filtered.length === 0) return alert("No reports match your filters.");
+
+            const headers = ["Status", "Type", "Address", "Date", "Verified_By", "Notes", "Lat", "Lon"];
             const rows = [headers];
-            const clean = (val) => {
-                if (!val) return '';
-                const str = String(val);
-                return (str.includes('"') || str.includes(',')) ? `"${str.replace(/"/g, '""')}"` : str;
-            };
-            allReports.forEach(r => {
+            filtered.forEach(r => {
                 let [lat, lng] = (r.gps || ',').split(',');
-                rows.push([
-                    clean(r.status || 'active'), clean(r.systemType), clean(r.address), 
-                    clean(r.dateTime), clean(r.lastTechnician), clean(r.resolutionNotes), clean(r.resolvedAt), 
-                    lat, lng, clean(r.damage)
-                ]);
+                rows.push([r.status || 'active', r.systemType, r.address, r.dateTime, r.lastTechnician || 'N/A', r.resolutionNotes || '', lat, lng]);
             });
-            let csvContent = rows.map(e => e.join(",")).join("\n");
+
+            const csvContent = rows.map(e => e.join(",")).join("\n");
             const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `shutoff_report_${new Date().toISOString().split('T')[0]}.csv`;
+            link.download = `DFD_Report_Export.csv`;
             link.click();
+            closeCSVModal();
         }
 
-        window.nukeDatabasePrompt = async function() {
-            const pw = prompt("⚠ ADMIN PURGE ⚠\nEnter Password:");
-            if (pw !== "FDADMIN") return;
-            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'));
-            const snapshot = await getDocs(q);
-            const batch = writeBatch(db);
-            snapshot.docs.forEach(d => batch.delete(d.ref));
-            await batch.commit();
-            alert("Database Cleared.");
-        };
+        window.setUpdateMode = function(mode) {
+            updateMode = mode;
+            const statusBtn = document.getElementById('btn-mode-update');
+            const resolveBtn = document.getElementById('btn-mode-resolve');
+            const notesSection = document.getElementById('notes-section');
+            const submitBtnText = document.getElementById('submit-btn-text');
+
+            if (mode === 'update') {
+                statusBtn.classList.add('bg-navy', 'text-white', 'border-navy');
+                statusBtn.classList.remove('border-slate-100', 'text-navy');
+                resolveBtn.classList.remove('bg-green-500', 'text-white', 'border-green-500');
+                resolveBtn.classList.add('border-green-100', 'text-green-700');
+                notesSection.classList.remove('hidden');
+                submitBtnText.innerText = "POST UPDATE";
+            } else {
+                resolveBtn.classList.add('bg-green-500', 'text-white', 'border-green-500');
+                resolveBtn.classList.remove('border-green-100', 'text-green-700');
+                statusBtn.classList.remove('bg-navy', 'text-white', 'border-navy');
+                statusBtn.classList.add('border-slate-100', 'text-navy');
+                notesSection.classList.add('hidden');
+                submitBtnText.innerText = "MARK AS RESTORED";
+            }
+        }
+
+        window.resolveReport = function(id) {
+            currentReportId = id;
+            const r = allReports.find(x => x._id === id);
+            document.getElementById('modal-address').innerText = r.address;
+            document.getElementById('resolve-modal').classList.remove('hidden');
+            setUpdateMode('resolved'); 
+        }
+
+        window.closeModal = () => document.getElementById('resolve-modal').classList.add('hidden');
+
+        window.submitUpdate = async function() {
+            const tech = document.getElementById('tech-name').value.trim();
+            const notes = document.getElementById('res-notes').value.trim();
+            if (!tech) return alert("Please enter Last Name.");
+
+            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs', currentReportId);
+            const payload = { 
+                lastTechnician: tech, 
+                resolutionNotes: notes, 
+                updatedAt: new Date().toISOString() 
+            };
+            if (updateMode === 'resolved') { 
+                payload.status = 'resolved'; 
+                payload.resolvedAt = new Date().toISOString(); 
+            }
+            
+            await updateDoc(ref, payload);
+            closeModal();
+        }
+
+        window.flyToReport = (lat, lng, id) => {
+            if(window.innerWidth < 768) toggleSidebar();
+            map.flyTo([lat, lng], 18);
+            const m = reportMarkers.get(id);
+            if(m) markersCluster.zoomToShowLayer(m, () => m.openPopup());
+        }
+
+        // --- ENHANCED PURGE LOGIC ---
+        window.nukeDatabasePrompt = function() {
+            const modal = document.getElementById('purge-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.getElementById('purge-pass').value = '';
+                document.getElementById('purge-error').classList.add('hidden');
+            }
+        }
+
+        window.closePurgeModal = () => document.getElementById('purge-modal').classList.add('hidden');
+
+        window.submitPurge = async function() {
+            const pwInput = document.getElementById('purge-pass');
+            const errorMsg = document.getElementById('purge-error');
+            
+            if (pwInput.value !== "Lott278") {
+                errorMsg.classList.remove('hidden');
+                pwInput.value = '';
+                return;
+            }
+
+            if (confirm("FINAL WARNING: This will permanently delete ALL historical and active records. Continue?")) {
+                try {
+                    const q = collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs');
+                    const snap = await getDocs(q);
+                    
+                    if (snap.empty) {
+                        alert("Database is already empty.");
+                        closePurgeModal();
+                        return;
+                    }
+
+                    // Handle batches in chunks of 500 (Firebase Limit)
+                    let docs = [...snap.docs];
+                    while (docs.length > 0) {
+                        const batch = writeBatch(db);
+                        const chunk = docs.splice(0, 500);
+                        chunk.forEach(d => batch.delete(d.ref));
+                        await batch.commit();
+                    }
+                    
+                    alert("Database successfully purged.");
+                    closePurgeModal();
+                } catch (error) {
+                    alert("Purge failed: " + error.message);
+                }
+            }
+        }
     </script>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col overflow-hidden relative">
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden relative">
 
-    <!-- RESOLUTION MODAL -->
+    <!-- CUSTOM PURGE AUTHORIZATION MODAL -->
+    <div id="purge-modal" class="fixed inset-0 z-[10002] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-red-950/90 backdrop-blur-md" onclick="closePurgeModal()"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border-4 border-red-600 animate-in zoom-in duration-300">
+            <div class="bg-red-600 p-6 text-white text-center">
+                <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <h3 class="text-xl font-black uppercase tracking-tighter">Authorize Purge</h3>
+                <p class="text-red-100 text-[10px] font-bold mt-1 uppercase tracking-widest">Administrative Override Required</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-[11px] text-gray-500 text-center font-medium leading-relaxed">
+                    You are attempting to delete all incident records. This action is <span class="text-red-600 font-black">PERMANENT</span> and cannot be undone.
+                </p>
+                <div>
+                    <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1 text-center">Secondary Admin Password</label>
+                    <input type="password" id="purge-pass" class="w-full bg-slate-50 border-2 border-slate-200 p-3 rounded-xl text-center text-lg font-black tracking-[0.3em] focus:border-red-600 focus:outline-none transition-all">
+                    <p id="purge-error" class="text-red-600 text-[10px] font-black mt-2 text-center hidden">Access Denied: Invalid Password</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mt-4">
+                    <button onclick="closePurgeModal()" class="py-3 rounded-xl bg-slate-100 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
+                    <button onclick="submitPurge()" class="py-3 rounded-xl bg-red-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg">Confirm Purge</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALS -->
+    <div id="csv-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-navy/80 backdrop-blur-sm" onclick="closeCSVModal()"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h3 class="text-lg font-black uppercase text-navy mb-4">Export Filtered Data</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Status</label>
+                    <select id="csv-filter-status" class="w-full bg-slate-50 border p-2 rounded-lg text-sm">
+                        <option value="all">All Statuses</option>
+                        <option value="active">Active Only</option>
+                        <option value="resolved">Resolved Only</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">System Type</label>
+                    <select id="csv-filter-type" class="w-full bg-slate-50 border p-2 rounded-lg text-sm">
+                        <option value="all">All Types</option>
+                        <option value="Water Meter">Water Meters Only</option>
+                        <option value="Sprinkler System">Sprinklers Only</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Timeframe</label>
+                    <select id="csv-filter-time" class="w-full bg-slate-50 border p-2 rounded-lg text-sm">
+                        <option value="all">All Time</option>
+                        <option value="7">Last 7 Days</option>
+                        <option value="30">Last 30 Days</option>
+                    </select>
+                </div>
+                <button onclick="processCSVDownload()" class="w-full bg-navy text-white font-black py-3 rounded-xl uppercase tracking-widest text-xs mt-4">Generate CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UPDATE MODAL -->
     <div id="resolve-modal" class="fixed inset-0 z-[10000] hidden flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-navy/80 backdrop-blur-sm" onclick="closeModal()"></div>
         <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div class="bg-navy p-6 text-white">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h3 class="text-xl font-black uppercase tracking-tight">Update Report</h3>
-                        <p id="modal-address" class="text-blue-200 text-xs font-semibold mt-1">Address Loading...</p>
-                    </div>
-                    <button onclick="closeModal()" class="text-white/50 hover:text-white transition-colors">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
+            <div class="bg-navy p-6 text-white flex justify-between">
+                <div><h3 class="text-xl font-black uppercase tracking-tight">Update Report</h3><p id="modal-address" class="text-blue-200 text-xs mt-1">Address...</p></div>
+                <button onclick="closeModal()" class="text-white/50 hover:text-white transition-colors">✕</button>
             </div>
             
-            <div class="p-6 space-y-5">
-                <div>
-                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Technician Last Name</label>
-                    <input type="text" id="tech-name" placeholder="E.g., Smith" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-navy focus:outline-none transition-all">
-                </div>
-                
-                <div>
-                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Update / Resolution Notes</label>
-                    <textarea id="res-notes" rows="3" placeholder="Enter findings or restoration details..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-navy focus:outline-none transition-all"></textarea>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="btn-mode-update" onclick="setUpdateMode('update')" class="p-4 rounded-xl border-2 transition-all text-center flex flex-col items-center">
+                        <span class="font-black text-xs uppercase block">Status Update</span>
+                        <span class="text-[9px] uppercase font-bold opacity-60">Add Note Only</span>
+                    </button>
+                    <button id="btn-mode-resolve" onclick="setUpdateMode('resolved')" class="p-4 rounded-xl border-2 transition-all text-center flex flex-col items-center">
+                        <span class="font-black text-xs uppercase block">Service Restored</span>
+                        <span class="text-[9px] uppercase font-bold opacity-60">Resolve Shutoff</span>
+                    </button>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 pt-2">
-                    <button onclick="submitUpdate(false)" class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-slate-100 hover:border-navy hover:bg-slate-50 transition-all group">
-                        <span class="text-navy font-black text-xs uppercase mb-1">Status Update</span>
-                        <span class="text-[9px] text-gray-400 font-bold group-hover:text-navy/60 transition-colors uppercase">Keep Active</span>
-                    </button>
-                    <button onclick="submitUpdate(true)" class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-green-100 bg-green-50 hover:bg-green-100 transition-all group">
-                        <span class="text-green-700 font-black text-xs uppercase mb-1">Service Restored</span>
-                        <span class="text-[9px] text-green-600/60 font-bold uppercase">Resolve & Hide</span>
-                    </button>
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Verified By</label>
+                        <input type="text" id="tech-name" placeholder="Last Name" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:outline-none transition-all">
+                    </div>
+                    
+                    <div id="notes-section" class="hidden animate-in slide-in-from-top-2 duration-200">
+                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Update Notes</label>
+                        <textarea id="res-notes" rows="3" placeholder="Enter status update details..." class="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:outline-none transition-all"></textarea>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="bg-slate-50 p-4 text-center border-t border-slate-100">
-                <p class="text-[9px] text-gray-400 font-medium leading-relaxed uppercase tracking-wider">Updates are synced in real-time across all field devices.</p>
+
+                <button onclick="submitUpdate()" class="w-full bg-navy text-white font-black py-4 rounded-xl uppercase tracking-widest text-xs shadow-lg hover:bg-navy-light active:scale-[0.98] transition-all">
+                    <span id="submit-btn-text">SUBMIT</span>
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- LOGIN -->
+    <!-- LOGIN SCREEN -->
     <div id="login-overlay" class="fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-500 px-4">
         <div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div>
-            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="DFD" class="h-16 w-auto mx-auto mb-4 drop-shadow-lg">
-            <h2 class="text-2xl font-black text-white mb-1 uppercase">Admin Portal</h2>
-            <p class="text-blue-200 text-xs mb-6 font-medium uppercase tracking-widest">Water Shutoff Command</p>
+            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-16 w-auto mx-auto mb-4 drop-shadow-lg object-contain">
+            <h2 class="text-2xl font-black text-white mb-1 uppercase tracking-tight">Admin Portal</h2>
+            <p class="text-blue-200 text-xs mb-6 font-medium tracking-wide uppercase">Water Shutoff Command</p>
             <div class="space-y-4">
-                <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="ACCESS CODE" class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white text-center tracking-[0.2em] focus:outline-none focus:ring-2 focus:ring-yellow text-sm">
-                <p id="login-error" class="text-red-400 font-bold text-xs hidden">Invalid Access Code</p>
-                <button onclick="checkLogin()" class="w-full bg-white text-navy font-black py-3 rounded-lg hover:bg-gray-100 transition-all shadow-lg text-xs uppercase tracking-wider">Authenticate</button>
+                <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="ACCESS CODE" 
+                    class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-[0.2em] focus:outline-none focus:ring-2 focus:ring-yellow transition-all shadow-inner text-sm">
+                <p id="login-error" class="text-red-400 font-bold text-xs hidden bg-red-900/30 py-1 rounded border border-red-500/30">Invalid Access Code</p>
+                <button id="login-btn" onclick="checkLogin()" 
+                    class="w-full bg-white text-navy font-black py-3 rounded-lg hover:bg-gray-100 active:scale-95 transition-all shadow-lg uppercase tracking-wider text-xs">
+                    Authenticate
+                </button>
             </div>
-            <div class="mt-6 flex items-center justify-center gap-2 opacity-60">
-                <div id="secure-light" class="w-2 h-2 rounded-full"></div>
-                <p id="secure-text" class="text-[10px] font-mono tracking-widest uppercase">Checking Security...</p>
+            <div id="security-badge" class="mt-6 flex items-center justify-center gap-2 opacity-60">
+                <div id="secure-light" class="w-2 h-2 rounded-full transition-colors duration-500"></div>
+                <p id="secure-text" class="text-[10px] font-mono tracking-widest uppercase transition-colors duration-500">CHECKING SECURITY...</p>
             </div>
         </div>
     </div>
 
-    <!-- DASHBOARD -->
-    <div id="dashboard-view" class="hidden absolute inset-0 flex">
-        <!-- SIDEBAR -->
-        <div id="list-sidebar" class="absolute inset-y-0 left-0 w-80 glass-dark z-[60] transform -translate-x-full transition-transform duration-300 shadow-2xl flex flex-col border-r border-white/10">
-            <div class="p-4 border-b border-white/10 flex items-center justify-between bg-navy/20">
-                <span class="text-white font-black uppercase tracking-wider text-sm">Incident Log</span>
-                <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"></path></svg></button>
+    <!-- DASHBOARD VIEW -->
+    <div id="dashboard-view" class="hidden absolute inset-0 flex flex-col">
+        <header class="h-20 bg-white border-b border-gray-200 px-6 flex items-center justify-between z-[70]">
+            <div class="flex items-center gap-4">
+                <button onclick="toggleSidebar()" class="bg-navy text-white p-2.5 rounded-lg lg:hidden shadow-md">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </button>
+                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-10">
+                <div class="hidden sm:block">
+                    <h1 class="text-navy font-black uppercase text-base leading-none">Command Center</h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span id="status-indicator" class="w-2 h-2 rounded-full bg-yellow-400"></span>
+                        <p id="status-text" class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Connecting...</p>
+                    </div>
+                </div>
             </div>
-            <div id="report-list" class="flex-1 overflow-y-auto"></div>
-        </div>
-        
-        <!-- MAP -->
-        <div class="relative flex-1 h-full w-full">
-            <div id="map" class="absolute inset-0 z-0 bg-gray-200"></div>
 
-            <!-- TOP CONTROLS -->
-            <div class="absolute top-0 left-0 w-full z-50 pointer-events-none p-4 flex flex-col gap-4">
-                <div class="pointer-events-auto glass-panel rounded-xl shadow-floating p-4 flex items-center justify-between gap-4">
-                    <div class="flex items-center gap-4">
-                        <button onclick="toggleSidebar()" class="bg-navy text-white p-2.5 rounded-lg shadow"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
-                        <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-10 w-auto">
-                        <div>
-                            <h1 class="text-navy font-black uppercase text-base leading-none">Command Center</h1>
-                            <div class="flex items-center gap-2 mt-1">
-                                <span id="status-indicator" class="w-2 h-2 rounded-full bg-yellow-400"></span>
-                                <p id="status-text" class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Connecting...</p>
+            <div class="hidden md:flex gap-8 items-center border-l border-r border-gray-100 px-8">
+                <div class="text-center">
+                    <span id="count" class="block text-2xl font-black text-navy leading-none transition-all duration-300">--</span>
+                    <span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Active Reports</span>
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center">
+                        <div class="w-3 h-3 rounded-full bg-blue-600 mb-1 border border-white shadow-sm"></div>
+                        <span class="text-[8px] font-bold text-gray-400 uppercase">Meter</span>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="w-3 h-3 rounded-sm bg-red-600 mb-1 border border-white shadow-sm"></div>
+                        <span class="text-[8px] font-bold text-gray-400 uppercase">System</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <nav class="bg-slate-100 p-1 rounded-xl flex mr-2 hidden lg:flex">
+                    <button id="nav-map" onclick="switchView('map')" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase bg-navy text-white transition-all shadow-sm">Map</button>
+                    <button id="nav-analytics" onclick="switchView('analytics')" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase text-navy hover:bg-white transition-all">Analytics</button>
+                </nav>
+
+                <a href="water_shutoff.html" class="bg-navy hover:bg-navy-light text-white text-[10px] font-black py-2.5 px-5 rounded-lg transition-all shadow hover:shadow-lg active:scale-95 flex items-center gap-2 uppercase tracking-widest">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    New Report
+                </a>
+
+                <button onclick="performLogout()" class="text-gray-400 hover:text-red-600 p-2 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 relative flex">
+            <aside id="list-sidebar" class="absolute inset-y-0 left-0 w-80 glass-dark z-[60] transform -translate-x-full lg:translate-x-0 transition-transform duration-300 flex flex-col border-r border-white/10 shadow-2xl">
+                <div class="p-4 border-b border-white/10 bg-navy/20 flex items-center justify-between">
+                    <span class="text-white font-black uppercase tracking-wider text-xs">Incident Log</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[9px] text-gray-400 uppercase font-bold">Historical</span>
+                        <label class="switch"><input type="checkbox" id="historical-toggle" onchange="toggleHistorical()"><span class="slider"></span></label>
+                    </div>
+                </div>
+                <div id="report-list" class="flex-1 overflow-y-auto"></div>
+            </aside>
+
+            <div class="flex-1 relative overflow-hidden">
+                <div id="map-container" class="absolute inset-0">
+                    <div id="map" class="w-full h-full bg-slate-200"></div>
+                    <div class="absolute bottom-6 left-0 w-full z-50 flex justify-center pointer-events-none px-4">
+                        <div class="pointer-events-auto bg-white rounded-full p-2 shadow-floating flex items-center gap-1 border border-gray-200 scale-90 sm:scale-100">
+                            <button onclick="openCSVModal()" class="flex items-center gap-2 px-6 py-2.5 rounded-full hover:bg-blue-50 text-navy font-black text-[10px] uppercase tracking-widest transition-all">
+                                <span class="bg-blue-600 text-white p-1 rounded-full"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></span>
+                                Download CSV
+                            </button>
+                            <div class="w-px h-6 bg-gray-200"></div>
+                            <button onclick="nukeDatabasePrompt()" class="flex items-center gap-2 px-6 py-2.5 rounded-full hover:bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-widest transition-all">
+                                <span class="bg-red-600 text-white p-1 rounded-full"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></span>
+                                Purge All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="analytics-container" class="absolute inset-0 bg-slate-50 overflow-y-auto p-8 hidden">
+                    <div class="max-w-6xl mx-auto space-y-8">
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <h2 class="text-3xl font-black text-navy uppercase">Department BI Dashboard</h2>
+                                <p class="text-gray-400 font-bold uppercase tracking-widest text-xs mt-1">Incident Intelligence & Analytics</p>
+                            </div>
+                            <div class="text-[10px] font-black bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100 uppercase text-gray-400">Live Sync Enabled</div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <span class="text-blue-600 font-black text-[10px] uppercase tracking-widest">Active incidents</span>
+                                <h3 id="stat-active" class="text-4xl font-black text-navy mt-1">--</h3>
+                                <p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Requiring Verification</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <span class="text-green-600 font-black text-[10px] uppercase tracking-widest">Resolved incidents</span>
+                                <h3 id="stat-resolved" class="text-4xl font-black text-navy mt-1">--</h3>
+                                <p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Services Restored</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <span class="text-red-600 font-black text-[10px] uppercase tracking-widest">Damage Assessment</span>
+                                <h3 id="stat-damage" class="text-4xl font-black text-navy mt-1">--</h3>
+                                <p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Reports with Damage</p>
+                            </div>
+                            <div class="bg-navy p-6 rounded-2xl shadow-xl text-white">
+                                <span class="text-blue-300 font-black text-[10px] uppercase tracking-widest">Network Status</span>
+                                <h3 class="text-3xl font-black mt-1 uppercase tracking-tighter">Verified</h3>
+                                <div class="w-full bg-white/10 h-1 rounded-full mt-4"><div class="bg-yellow w-full h-full shadow-[0_0_8px_#f9c031]"></div></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-12">
+                            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+                                <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">Activity Timeline (Last 7 Days)</h4>
+                                <canvas id="chart-timeline" class="max-h-[300px]"></canvas>
+                            </div>
+                            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center">
+                                <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6 w-full">System Type Breakdown</h4>
+                                <div class="max-w-[280px] w-full"><canvas id="chart-dist"></canvas></div>
                             </div>
                         </div>
                     </div>
-
-                    <div class="hidden md:flex items-center gap-3 bg-slate-100/50 px-4 py-2 rounded-lg border border-gray-200">
-                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Historical View</span>
-                        <label class="switch">
-                            <input type="checkbox" id="historical-toggle" onchange="toggleHistorical()">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-
-                    <div class="flex gap-6 items-center px-6 border-l border-gray-100 hidden lg:flex">
-                        <div class="text-center">
-                            <span id="count" class="block text-2xl font-black text-navy leading-none">--</span>
-                            <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Active Shutoffs</span>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-2">
-                        <a href="water_shutoff.html" class="bg-navy text-white text-[10px] font-black py-2.5 px-4 rounded-lg shadow uppercase tracking-widest hover:bg-navy-light transition-all">New Report</a>
-                        <button onclick="performLogout()" class="bg-white border border-gray-200 p-2.5 rounded-lg text-gray-400 hover:text-red-600 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg></button>
-                    </div>
                 </div>
             </div>
-
-            <!-- BOTTOM ACTIONS -->
-            <div class="absolute bottom-8 left-0 w-full z-40 pointer-events-none flex justify-center">
-                <div class="pointer-events-auto glass-panel rounded-full px-2 py-2 shadow-floating flex items-center gap-1 scale-90 md:scale-100">
-                    <button onclick="exportToCSV()" class="group flex items-center gap-2 px-4 py-2 rounded-full hover:bg-blue-50 text-gray-600 font-bold text-[10px] uppercase tracking-widest">
-                        <span class="bg-blue-100 text-blue-600 p-1.5 rounded-full group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                        </span>
-                        Download Full CSV
-                    </button>
-                    <div class="w-px h-6 bg-gray-200 mx-1"></div>
-                    <button onclick="nukeDatabasePrompt()" class="group flex items-center gap-2 px-4 py-2 rounded-full hover:bg-red-50 text-gray-600 font-bold text-[10px] uppercase tracking-widest">
-                        <span class="bg-gray-100 text-gray-400 p-1.5 rounded-full group-hover:bg-red-600 group-hover:text-white transition-colors">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </span>
-                        Purge All
-                    </button>
-                </div>
-            </div>
-        </div>
+        </main>
     </div>
 </body>
 </html>
