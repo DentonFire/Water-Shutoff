@@ -34,6 +34,7 @@
                     fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
                     animation: {
                         'scan': 'scan-line 3s linear infinite',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                     },
                     keyframes: {
                         'scan-line': {
@@ -103,6 +104,7 @@
         let currentReportId = null;
         let updateMode = 'resolved';
         let charts = {};
+        let verificationInterval = null;
 
         // --- SAFE REDIRECT HELPER ---
         function safeRedirect(target) {
@@ -110,64 +112,103 @@
                 window.location.assign(target);
             } catch (e) {
                 console.warn("Redirect blocked by environment:", e);
-                // Fallback for preview environments
             }
         }
 
-        // Auth State Handler
+        // --- AUTH LOGIC START ---
+        
+        // This function handles the "Success" state after checks pass
+        function grantAccess(user) {
+            // Stop any polling if running
+            if (verificationInterval) clearInterval(verificationInterval);
+            document.getElementById('verification-modal').classList.add('hidden');
+
+            // Check 2: 30-Day Expiration
+            const loginTime = localStorage.getItem('denton_login_time');
+            const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+            
+            if (loginTime && (Date.now() - parseInt(loginTime) > thirtyDays)) {
+                alert("Session Expired. Please log in again.");
+                localStorage.removeItem('denton_login_time');
+                signOut(auth);
+                return;
+            }
+
+            // Check 3: Redirect Handling
+            const urlParams = new URLSearchParams(window.location.search);
+            const redirectTarget = urlParams.get('redirect');
+            if (redirectTarget === 'water_shutoff') {
+                safeRedirect('water_shutoff.html');
+                return;
+            }
+
+            // --- ACCESS GRANTED ---
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('dashboard-view').style.display = 'flex'; 
+            
+            const statusLight = document.getElementById('secure-light');
+            const statusText = document.getElementById('secure-text');
+            if (statusLight && statusText) {
+                statusLight.classList.add('bg-green-500', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
+                statusText.innerText = "SECURE CONNECTION // " + user.email;
+                statusText.classList.remove('text-red-300');
+            }
+
+            setTimeout(() => { 
+                if (!map) initMap();
+                map.invalidateSize(); 
+                listenToData();
+            }, 500);
+        }
+
+        function startVerificationPolling(user) {
+            const modal = document.getElementById('verification-modal');
+            const emailSpan = document.getElementById('verify-email-target');
+            
+            if (emailSpan) emailSpan.innerText = user.email;
+            modal.classList.remove('hidden');
+
+            // Poll every 3 seconds
+            if (verificationInterval) clearInterval(verificationInterval);
+            
+            verificationInterval = setInterval(() => {
+                user.reload().then(() => {
+                    if (user.emailVerified) {
+                        // SUCCESS! Scanner or user clicked it.
+                        clearInterval(verificationInterval);
+                        modal.innerHTML = `
+                            <div class="p-6 text-center">
+                                <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✓</div>
+                                <h3 class="text-xl font-bold text-navy mb-2">Verified!</h3>
+                                <p class="text-sm text-gray-500">Accessing Command Center...</p>
+                            </div>
+                        `;
+                        setTimeout(() => grantAccess(user), 1500);
+                    }
+                });
+            }, 3000);
+        }
+
+        // Main Listener
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                // Check 1: Email Verification
                 if (!user.emailVerified) {
-                    alert("⚠️ Access Denied\n\nYour email has not been verified. Please check your inbox for the verification link.");
-                    signOut(auth);
-                    return;
+                    // Don't sign out. Just show the polling modal.
+                    startVerificationPolling(user);
+                } else {
+                    // Already Verified
+                    grantAccess(user);
                 }
-
-                // Check 2: 30-Day Expiration
-                const loginTime = localStorage.getItem('denton_login_time');
-                const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-                
-                if (loginTime && (Date.now() - parseInt(loginTime) > thirtyDays)) {
-                    alert("Session Expired. Please log in again.");
-                    localStorage.removeItem('denton_login_time');
-                    signOut(auth);
-                    return;
-                }
-
-                // Check 3: Redirect Handling
-                const urlParams = new URLSearchParams(window.location.search);
-                const redirectTarget = urlParams.get('redirect');
-                if (redirectTarget === 'water_shutoff') {
-                    safeRedirect('water_shutoff.html');
-                    return;
-                }
-
-                // --- ACCESS GRANTED ---
-                document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('dashboard-view').style.display = 'flex'; // Explicitly show flex
-                
-                // Update Security Status
-                const statusLight = document.getElementById('secure-light');
-                const statusText = document.getElementById('secure-text');
-                if (statusLight && statusText) {
-                    statusLight.classList.add('bg-green-500', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
-                    statusText.innerText = "SECURE CONNECTION // " + user.email;
-                    statusText.classList.remove('text-red-300');
-                }
-
-                setTimeout(() => { 
-                    if (!map) initMap();
-                    map.invalidateSize(); 
-                    listenToData();
-                }, 500);
             } else {
-                // --- ACCESS DENIED ---
+                // Logged Out
                 document.getElementById('login-overlay').style.display = 'flex';
                 document.getElementById('dashboard-view').style.display = 'none';
-                document.getElementById('secure-text').innerText = "AWAITING AUTHENTICATION";
+                document.getElementById('verification-modal').classList.add('hidden');
+                if(verificationInterval) clearInterval(verificationInterval);
             }
         });
+
+        // --- AUTH LOGIC END ---
 
         // Login Logic
         window.isLoginMode = true;
@@ -216,42 +257,40 @@
             setPersistence(auth, browserLocalPersistence)
             .then(() => {
                 if (window.isLoginMode) {
-                    // LOGIN
                     return signInWithEmailAndPassword(auth, email, password);
                 } else {
                     // SIGN UP
                     return createUserWithEmailAndPassword(auth, email, password)
                         .then((userCredential) => {
-                            // Send Verification Email
-                            return sendEmailVerification(userCredential.user)
-                                .then(() => {
-                                    alert("✅ Account Created!\n\nA verification email has been sent to " + email + ".\n\nPlease check your email (and junk folder) and click the link to activate your account before logging in.");
-                                    signOut(auth); // Force them out until verified
-                                    // Reset UI to login mode
-                                    window.isLoginMode = true;
-                                    window.toggleAuthMode(); // Toggle back visually
-                                    throw new Error("VERIFY_EMAIL_SENT"); // Break chain to stop auto-login
-                                });
+                            return sendEmailVerification(userCredential.user);
+                            // We do NOT sign out here. onAuthStateChanged will catch the unverified user 
+                            // and launch the polling modal automatically.
                         });
                 }
             })
-            .then((userCredential) => {
-                // Login Successful Logic
-                if (userCredential && userCredential.user) {
-                    if (!userCredential.user.emailVerified) {
-                        alert("Please verify your email address before logging in.");
-                        signOut(auth);
-                    } else {
-                        localStorage.setItem('denton_login_time', Date.now().toString());
-                    }
-                }
+            .then(() => {
+                // Success logic is handled by onAuthStateChanged
             })
             .catch((error) => {
-                if (error.message === "VERIFY_EMAIL_SENT") return; // Handled above
                 btn.innerText = window.isLoginMode ? "Authenticate" : "Register System";
                 errorMsg.innerText = "Error: " + error.code;
                 errorMsg.classList.remove('hidden');
             });
+        }
+        
+        window.resendVerificationEmail = function() {
+            const user = auth.currentUser;
+            if(user) {
+                sendEmailVerification(user)
+                .then(() => alert("Email resent! If your city email scanner clicks it, you will be logged in automatically."))
+                .catch((e) => alert(e.message));
+            }
+        }
+
+        window.cancelVerification = function() {
+            signOut(auth);
+            document.getElementById('verification-modal').classList.add('hidden');
+            if(verificationInterval) clearInterval(verificationInterval);
         }
 
         window.performLogout = function() {
@@ -371,7 +410,6 @@
                     markersCluster.addLayer(marker);
                     reportMarkers.set(d._id, marker);
 
-                    // --- UPDATE FOR REQUEST #1: Add Unit Display Here ---
                     const listItem = document.createElement('div');
                     listItem.className = `p-3 border-b border-white/10 hover:bg-white/5 cursor-pointer transition-colors ${isResolved ? 'opacity-50' : ''}`;
                     listItem.onclick = () => flyToReport(lat, lng, d._id);
@@ -617,6 +655,29 @@
     </script>
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden relative">
+
+    <!-- VERIFICATION MODAL -->
+    <div id="verification-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-navy/95 backdrop-blur-md"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-8 text-center animate-in zoom-in duration-300">
+            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            </div>
+            <h3 class="text-xl font-black text-navy mb-2">Check Your Email</h3>
+            <p class="text-sm text-gray-500 mb-6 leading-relaxed">
+                We sent a verification link to <br> <span id="verify-email-target" class="font-bold text-navy">...</span>
+            </p>
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-left mb-6 text-blue-800">
+                <p class="font-bold mb-1">💡 Pro Tip:</p>
+                City email scanners often click links automatically. <strong>We are auto-checking your status</strong> right now. If the scanner clicks it, you will be logged in automatically!
+            </div>
+            
+            <div class="space-y-3">
+                <button onclick="window.resendVerificationEmail()" class="text-xs text-navy font-bold hover:underline">Resend Email</button>
+                <button onclick="window.cancelVerification()" class="block w-full border border-gray-300 text-gray-500 font-bold py-3 rounded-lg hover:bg-gray-50 text-xs uppercase tracking-widest">Back to Login</button>
+            </div>
+        </div>
+    </div>
 
     <!-- CUSTOM PURGE AUTHORIZATION MODAL -->
     <div id="purge-modal" class="fixed inset-0 z-[10002] hidden flex items-center justify-center p-4">
