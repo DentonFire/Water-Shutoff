@@ -12,11 +12,40 @@
             theme: { 
                 extend: { 
                     colors: { navy: '#152a40', red: '#bf2726', yellow: '#f9c031' },
-                    animation: { 'bounce-short': 'bounce 1s infinite' }
+                    animation: { 
+                        'bounce-short': 'bounce 1s infinite',
+                        'scan': 'scan-line 3s linear infinite'
+                    },
+                    keyframes: {
+                        'scan-line': {
+                            '0%': { backgroundPosition: '100% 0' },
+                            '100%': { backgroundPosition: '-100% 0' },
+                        }
+                    }
                 } 
             }
         }
     </script>
+
+    <style>
+        body { background-color: #f3f4f6; padding: 20px; }
+        .paper-doc { background: white; max-width: 40rem; margin: 0 auto; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 0.5rem; position: relative; }
+        input[type="radio"]:checked + div { background-color: #152a40; color: white; border-color: #152a40; }
+        #address-results::-webkit-scrollbar { width: 6px; }
+        #address-results::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .modal-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        /* QR Modal Animation */
+        .fade-in { animation: fadeIn 0.2s ease-out; }
+
+        /* Login/Redirect Screen Styles (Matches Index.html) */
+        #auth-loading { 
+            background-color: #152a40; 
+            background-image: url('https://www.transparenttextures.com/patterns/cubes.png'), radial-gradient(circle at top right, #1e3a58, #152a40);
+            background-repeat: repeat, no-repeat;
+        }
+        .scan-line-gradient { background: linear-gradient(90deg, #152a40 0%, #ef4444 50%, #152a40 100%); background-size: 200% 100%; }
+    </style>
 
     <!-- Firebase SDKs -->
     <script type="module">
@@ -41,31 +70,81 @@
 
         let currentUser = null;
 
-        // --- AUTH PROTECTION ---
-        onAuthStateChanged(auth, (user) => {
-            if (!user) {
-                // Not logged in -> Redirect to Login Page WITH PARAMETER
-                // This tells index.html to send them back here after login
-                window.location.href = "index.html?redirect=water_shutoff";
-            } else if (!user.email.endsWith('@cityofdenton.com')) {
-                // Logged in but wrong email -> Redirect
-                alert("Unauthorized Access");
-                window.location.href = "index.html";
-            } else {
-                // --- 30-DAY EXPIRATION CHECK ---
-                const loginTime = localStorage.getItem('denton_login_time');
-                const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-                
-                if (loginTime && (Date.now() - parseInt(loginTime) > thirtyDays)) {
-                    alert("Session Expired. Please log in again.");
-                    localStorage.removeItem('denton_login_time');
-                    signOut(auth);
-                    window.location.href = "index.html?redirect=water_shutoff";
-                    return;
+        // --- SAFE REDIRECT HELPER ---
+        function safeRedirect(target) {
+            try {
+                window.location.assign(target);
+            } catch (e) {
+                console.warn("Redirect blocked by environment:", e);
+                // Fallback UI matching the login page aesthetics
+                const loader = document.getElementById('auth-loading');
+                if (loader) {
+                    loader.innerHTML = `
+                        <div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
+                            <div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div>
+                            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-16 w-auto mx-auto mb-4 drop-shadow-lg object-contain">
+                            <h2 class="text-2xl font-black text-white mb-1 uppercase tracking-tight">Login Required</h2>
+                            <p class="text-blue-200 text-xs mb-6 font-medium tracking-wide uppercase">Water Shutoff Survey</p>
+                            
+                            <div class="space-y-3">
+                                <p class="text-white text-sm">Please log in to access this form.</p>
+                                <a href="${target}" class="block w-full bg-white text-navy font-black py-3 rounded-lg hover:bg-gray-100 transition shadow-lg uppercase tracking-wider text-xs">
+                                    Proceed to Login
+                                </a>
+                            </div>
+                            
+                            <div id="security-badge" class="mt-6 flex items-center justify-center gap-2 opacity-60">
+                                <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                <p class="text-[10px] font-mono tracking-widest uppercase text-white">ACCESS RESTRICTED</p>
+                            </div>
+                        </div>
+                    `;
                 }
+            }
+        }
 
-                // Authorized
-                currentUser = user;
+        // --- AUTH PROTECTION & SECURITY CURTAIN ---
+        onAuthStateChanged(auth, (user) => {
+            const loadingScreen = document.getElementById('auth-loading');
+            
+            // 1. Not Logged In?
+            if (!user) {
+                safeRedirect("index.html?redirect=water_shutoff");
+                return;
+            } 
+            
+            // 2. Email Wrong Domain?
+            if (!user.email.endsWith('@cityofdenton.com')) {
+                alert("Unauthorized Access");
+                safeRedirect("index.html");
+                return;
+            }
+
+            // 3. Email Not Verified?
+            if (!user.emailVerified) {
+                alert("Please verify your email address first.\nCheck your inbox for the verification link.");
+                signOut(auth);
+                safeRedirect("index.html");
+                return;
+            }
+
+            // 4. Session Expired (30 days)?
+            const loginTime = localStorage.getItem('denton_login_time');
+            const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+            if (loginTime && (Date.now() - parseInt(loginTime) > thirtyDays)) {
+                alert("Session Expired. Please log in again.");
+                localStorage.removeItem('denton_login_time');
+                signOut(auth);
+                safeRedirect("index.html?redirect=water_shutoff");
+                return;
+            }
+
+            // --- ACCESS GRANTED ---
+            currentUser = user;
+            // Lift the curtain
+            if(loadingScreen) {
+                loadingScreen.style.opacity = '0';
+                setTimeout(() => { loadingScreen.style.display = 'none'; }, 500);
             }
         });
 
@@ -383,20 +462,27 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
             }, 300);
         }
     </script>
-
-    <style>
-        body { background-color: #f3f4f6; padding: 20px; }
-        .paper-doc { background: white; max-width: 40rem; margin: 0 auto; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 0.5rem; position: relative; }
-        input[type="radio"]:checked + div { background-color: #152a40; color: white; border-color: #152a40; }
-        #address-results::-webkit-scrollbar { width: 6px; }
-        #address-results::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .modal-fade-in { animation: fadeIn 0.2s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        /* QR Modal Animation */
-        .fade-in { animation: fadeIn 0.2s ease-out; }
-    </style>
 </head>
 <body class="relative">
+
+    <!-- SECURITY CURTAIN: Prevents seeing the form before auth check completes -->
+    <div id="auth-loading" class="fixed inset-0 z-[10000] flex items-center justify-center transition-opacity duration-500 px-4">
+        <div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div>
+            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-16 w-auto mx-auto mb-4 drop-shadow-lg object-contain">
+            <h2 class="text-2xl font-black text-white mb-1 uppercase tracking-tight">Verifying Access</h2>
+            <p class="text-blue-200 text-xs mb-6 font-medium tracking-wide uppercase">Water Shutoff Survey</p>
+            
+            <div class="space-y-3">
+                <div class="text-white/70 text-sm animate-pulse">Connecting to secure server...</div>
+            </div>
+            
+            <div id="security-badge" class="mt-6 flex items-center justify-center gap-2 opacity-60">
+                <div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
+                <p class="text-[10px] font-mono tracking-widest uppercase text-white">CHECKING CREDENTIALS</p>
+            </div>
+        </div>
+    </div>
 
     <div class="paper-doc">
         <!-- REMOVED HEADER UTILITY BAR -->
