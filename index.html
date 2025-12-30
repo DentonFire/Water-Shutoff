@@ -83,7 +83,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Added setPersistence and browserLocalPersistence
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, doc, updateDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -109,60 +110,140 @@
         let updateMode = 'resolved';
         let charts = {};
 
-        window.addEventListener('DOMContentLoaded', () => {
-            const session = localStorage.getItem('denton_admin_session');
-            if (session === 'active') {
-                showDashboard();
-                connectFirebase();
-            }
-            const isSecure = window.location.protocol === 'https:';
-            const statusLight = document.getElementById('secure-light');
-            const statusText = document.getElementById('secure-text');
-            if (statusLight && statusText) {
-                if (isSecure) {
-                    statusLight.classList.add('bg-green-500', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
-                    statusText.innerText = "SECURE CONNECTION // DFD-INT";
-                } else {
-                    statusLight.classList.add('bg-red-500', 'animate-pulse');
-                    statusText.innerText = "UNENCRYPTED // LOCALHOST";
-                    statusText.classList.add('text-red-300');
+        // Auth State Handler
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // --- 30-DAY EXPIRATION CHECK ---
+                const loginTime = localStorage.getItem('denton_login_time');
+                const thirtyDays = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+                
+                if (loginTime && (Date.now() - parseInt(loginTime) > thirtyDays)) {
+                    // Time is up
+                    alert("Your 30-day session has expired. Please log in again.");
+                    localStorage.removeItem('denton_login_time');
+                    signOut(auth);
+                    return;
                 }
+
+                // --- REDIRECT CHECK (If they came from Survey form) ---
+                const urlParams = new URLSearchParams(window.location.search);
+                const redirectTarget = urlParams.get('redirect');
+                if (redirectTarget === 'water_shutoff') {
+                    // Redirect back to survey
+                    window.location.href = 'water_shutoff.html';
+                    return;
+                }
+
+                // Normal Login Flow
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                
+                // Update Security Status
+                const statusLight = document.getElementById('secure-light');
+                const statusText = document.getElementById('secure-text');
+                if (statusLight && statusText) {
+                    statusLight.classList.add('bg-green-500', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
+                    statusText.innerText = "SECURE CONNECTION // " + user.email;
+                    statusText.classList.remove('text-red-300');
+                }
+
+                // Initialize App
+                setTimeout(() => { 
+                    if (!map) initMap();
+                    map.invalidateSize(); 
+                    listenToData();
+                }, 500);
+            } else {
+                // User is signed out.
+                document.getElementById('login-overlay').style.display = 'flex';
+                document.getElementById('dashboard-view').classList.add('hidden');
+                document.getElementById('secure-text').innerText = "AWAITING AUTHENTICATION";
             }
         });
 
-        window.checkLogin = function() {
-            const passInput = document.getElementById('admin-pass');
-            if (passInput.value === "FDADMIN") {
-                document.getElementById('login-btn').innerText = "Connecting...";
-                localStorage.setItem('denton_admin_session', 'active');
-                setTimeout(() => { showDashboard(); connectFirebase(); }, 800);
+        // Login Logic
+        window.isLoginMode = true;
+
+        window.toggleAuthMode = function() {
+            window.isLoginMode = !window.isLoginMode;
+            const title = document.getElementById('auth-mode-title');
+            const btn = document.getElementById('login-btn');
+            const toggleText = document.getElementById('auth-toggle-text');
+            const errorMsg = document.getElementById('login-error');
+            
+            errorMsg.classList.add('hidden');
+
+            if (window.isLoginMode) {
+                title.innerText = "Admin Portal";
+                btn.innerText = "Authenticate";
+                toggleText.innerHTML = "Need access? <span class='underline'>Create Account</span>";
             } else {
-                document.getElementById('login-error').classList.remove('hidden');
-                passInput.value = '';
+                title.innerText = "Create Account";
+                btn.innerText = "Register System";
+                toggleText.innerHTML = "Have credentials? <span class='underline'>Log In</span>";
             }
+        }
+
+        window.handleAuth = function() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const errorMsg = document.getElementById('login-error');
+            const btn = document.getElementById('login-btn');
+
+            if (!email || !password) {
+                errorMsg.innerText = "Enter Email & Password";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            // --- THE BOUNCER: DOMAIN CHECK ---
+            if (!email.endsWith('@cityofdenton.com')) {
+                errorMsg.innerText = "Restricted: @cityofdenton.com required";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            btn.innerText = "Verifying...";
+            errorMsg.classList.add('hidden');
+
+            // --- SET PERSISTENCE BEFORE LOGIN ---
+            setPersistence(auth, browserLocalPersistence)
+            .then(() => {
+                if (window.isLoginMode) {
+                    return signInWithEmailAndPassword(auth, email, password);
+                } else {
+                    return createUserWithEmailAndPassword(auth, email, password);
+                }
+            })
+            .then((userCredential) => {
+                // On Success: Set the timestamp for the 30-day timer
+                localStorage.setItem('denton_login_time', Date.now().toString());
+                
+                // Note: The onAuthStateChanged listener handles the UI updates
+            })
+            .catch((error) => {
+                btn.innerText = window.isLoginMode ? "Authenticate" : "Register System";
+                errorMsg.innerText = "Access Denied: " + error.code;
+                errorMsg.classList.remove('hidden');
+            });
         }
 
         window.performLogout = function() {
             if(!confirm("End secure session?")) return;
-            localStorage.removeItem('denton_admin_session');
-            signOut(auth).then(() => location.reload());
+            localStorage.removeItem('denton_login_time'); // Clear timer
+            signOut(auth);
         }
 
-        window.handleEnter = function(e) { if (e.key === 'Enter') window.checkLogin(); }
-
-        function showDashboard() {
-            document.getElementById('login-overlay').style.display = 'none';
-            document.getElementById('dashboard-view').classList.remove('hidden');
-            setTimeout(() => { if(map) map.invalidateSize(); }, 500);
-        }
+        window.handleEnter = function(e) { if (e.key === 'Enter') window.handleAuth(); }
 
         window.toggleSidebar = function() {
             document.getElementById('list-sidebar').classList.toggle('-translate-x-full');
         }
 
+        // --- MAP LOGIC UPDATE ---
         window.toggleHistorical = function() {
             viewHistorical = document.getElementById('historical-toggle').checked;
-            renderData();
+            renderData(); // Re-run renderData to update map/list
         }
 
         window.switchView = function(viewName) {
@@ -190,13 +271,6 @@
             }
         }
 
-        function connectFirebase() {
-            signInAnonymously(auth).then(() => {
-                initMap();
-                listenToData();
-            });
-        }
-
         function initMap() {
             if (map) return;
             map = L.map('map', { zoomControl: false }).setView([33.2148, -97.1331], 13);
@@ -219,15 +293,23 @@
                 updateAnalytics();
                 document.getElementById('status-indicator').className = "w-2 h-2 rounded-full bg-green-500 shadow-sm";
                 document.getElementById('status-text').innerText = "System Online";
+            }, (error) => {
+                 console.error("Data Error:", error);
+                 if(error.code === 'permission-denied') {
+                     document.getElementById('status-text').innerText = "AUTH ERROR: RE-LOGIN";
+                     document.getElementById('status-indicator').className = "w-2 h-2 rounded-full bg-red-500 shadow-sm";
+                 }
             });
         }
 
         function renderData() {
+            // 1. Clear everything first
             markersCluster.clearLayers();
             reportMarkers.clear();
             const listContainer = document.getElementById('report-list');
             listContainer.innerHTML = '';
 
+            // 2. Filter logic: If Historical is ON, show all. If OFF, show only NOT resolved.
             const filteredReports = viewHistorical ? allReports : allReports.filter(r => r.status !== 'resolved');
 
             filteredReports.forEach(d => {
@@ -431,6 +513,16 @@
             }
             
             await updateDoc(ref, payload);
+            
+            // --- EMAIL NOTIFICATION (CLIENT-SIDE) ---
+            if (updateMode === 'resolved') {
+                 const addr = document.getElementById('modal-address').innerText;
+                 const subject = `Shutoff Resolved: ${addr}`;
+                 const body = `The water shutoff at ${addr} has been resolved by ${tech}.\n\nNotes: ${notes}\n\nTime: ${new Date().toLocaleString()}`;
+                 // Open default mail client
+                 window.location.href = `mailto:firemarshal@cityofdenton.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            }
+
             closeModal();
         }
 
@@ -457,7 +549,8 @@
             const pwInput = document.getElementById('purge-pass');
             const errorMsg = document.getElementById('purge-error');
             
-            if (pwInput.value !== "Lott278") {
+            // --- UPDATED PASSWORD (DentonFire1) ---
+            if (pwInput.value !== "DentonFire1") {
                 errorMsg.classList.remove('hidden');
                 pwInput.value = '';
                 return;
@@ -595,22 +688,33 @@
         </div>
     </div>
 
-    <!-- LOGIN SCREEN -->
+    <!-- LOGIN SCREEN (UPDATED for Email/Password) -->
     <div id="login-overlay" class="fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-500 px-4">
         <div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div>
             <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-16 w-auto mx-auto mb-4 drop-shadow-lg object-contain">
-            <h2 class="text-2xl font-black text-white mb-1 uppercase tracking-tight">Admin Portal</h2>
+            <h2 id="auth-mode-title" class="text-2xl font-black text-white mb-1 uppercase tracking-tight">Admin Portal</h2>
             <p class="text-blue-200 text-xs mb-6 font-medium tracking-wide uppercase">Water Shutoff Command</p>
-            <div class="space-y-4">
-                <input type="password" id="admin-pass" onkeyup="handleEnter(event)" placeholder="ACCESS CODE" 
-                    class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-[0.2em] focus:outline-none focus:ring-2 focus:ring-yellow transition-all shadow-inner text-sm">
-                <p id="login-error" class="text-red-400 font-bold text-xs hidden bg-red-900/30 py-1 rounded border border-red-500/30">Invalid Access Code</p>
-                <button id="login-btn" onclick="checkLogin()" 
+            
+            <div class="space-y-3">
+                <input type="email" id="email" placeholder="USER EMAIL" 
+                    class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-wider focus:outline-none focus:ring-2 focus:ring-yellow transition-all shadow-inner text-sm">
+                
+                <input type="password" id="password" onkeyup="handleEnter(event)" placeholder="PASSWORD" 
+                    class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-wider focus:outline-none focus:ring-2 focus:ring-yellow transition-all shadow-inner text-sm">
+                
+                <p id="login-error" class="text-red-400 font-bold text-xs hidden bg-red-900/30 py-1 rounded border border-red-500/30">Invalid Access</p>
+                
+                <button id="login-btn" onclick="handleAuth()" 
                     class="w-full bg-white text-navy font-black py-3 rounded-lg hover:bg-gray-100 active:scale-95 transition-all shadow-lg uppercase tracking-wider text-xs">
                     Authenticate
                 </button>
+
+                <p id="auth-toggle-text" onclick="toggleAuthMode()" class="text-gray-400 text-[10px] mt-4 cursor-pointer hover:text-white transition-colors uppercase tracking-widest">
+                    Need access? <span class="underline">Create Account</span>
+                </p>
             </div>
+            
             <div id="security-badge" class="mt-6 flex items-center justify-center gap-2 opacity-60">
                 <div id="secure-light" class="w-2 h-2 rounded-full transition-colors duration-500"></div>
                 <p id="secure-text" class="text-[10px] font-mono tracking-widest uppercase transition-colors duration-500">CHECKING SECURITY...</p>
