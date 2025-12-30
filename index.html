@@ -32,10 +32,6 @@
                         slate: { 850: '#151f2e' }
                     },
                     fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-                    boxShadow: {
-                        'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
-                        'floating': '0 8px 30px rgba(0,0,0,0.12)'
-                    },
                     animation: {
                         'scan': 'scan-line 3s linear infinite',
                     },
@@ -54,7 +50,6 @@
 
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .glass-panel { background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.5); }
         .glass-dark { background: rgba(21, 42, 64, 0.95); backdrop-filter: blur(12px); border-right: 1px solid rgba(255, 255, 255, 0.1); }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
@@ -83,8 +78,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // Added setPersistence and browserLocalPersistence
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, doc, updateDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -110,33 +104,48 @@
         let updateMode = 'resolved';
         let charts = {};
 
+        // --- SAFE REDIRECT HELPER ---
+        function safeRedirect(target) {
+            try {
+                window.location.assign(target);
+            } catch (e) {
+                console.warn("Redirect blocked by environment:", e);
+                // Fallback for preview environments
+            }
+        }
+
         // Auth State Handler
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                // --- 30-DAY EXPIRATION CHECK ---
+                // Check 1: Email Verification
+                if (!user.emailVerified) {
+                    alert("⚠️ Access Denied\n\nYour email has not been verified. Please check your inbox for the verification link.");
+                    signOut(auth);
+                    return;
+                }
+
+                // Check 2: 30-Day Expiration
                 const loginTime = localStorage.getItem('denton_login_time');
-                const thirtyDays = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+                const thirtyDays = 30 * 24 * 60 * 60 * 1000;
                 
                 if (loginTime && (Date.now() - parseInt(loginTime) > thirtyDays)) {
-                    // Time is up
-                    alert("Your 30-day session has expired. Please log in again.");
+                    alert("Session Expired. Please log in again.");
                     localStorage.removeItem('denton_login_time');
                     signOut(auth);
                     return;
                 }
 
-                // --- REDIRECT CHECK (If they came from Survey form) ---
+                // Check 3: Redirect Handling
                 const urlParams = new URLSearchParams(window.location.search);
                 const redirectTarget = urlParams.get('redirect');
                 if (redirectTarget === 'water_shutoff') {
-                    // Redirect back to survey
-                    window.location.href = 'water_shutoff.html';
+                    safeRedirect('water_shutoff.html');
                     return;
                 }
 
-                // Normal Login Flow
+                // --- ACCESS GRANTED ---
                 document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('dashboard-view').classList.remove('hidden');
+                document.getElementById('dashboard-view').style.display = 'flex'; // Explicitly show flex
                 
                 // Update Security Status
                 const statusLight = document.getElementById('secure-light');
@@ -147,16 +156,15 @@
                     statusText.classList.remove('text-red-300');
                 }
 
-                // Initialize App
                 setTimeout(() => { 
                     if (!map) initMap();
                     map.invalidateSize(); 
                     listenToData();
                 }, 500);
             } else {
-                // User is signed out.
+                // --- ACCESS DENIED ---
                 document.getElementById('login-overlay').style.display = 'flex';
-                document.getElementById('dashboard-view').classList.add('hidden');
+                document.getElementById('dashboard-view').style.display = 'none';
                 document.getElementById('secure-text').innerText = "AWAITING AUTHENTICATION";
             }
         });
@@ -196,41 +204,59 @@
                 return;
             }
 
-            // --- THE BOUNCER: DOMAIN CHECK ---
             if (!email.endsWith('@cityofdenton.com')) {
                 errorMsg.innerText = "Restricted: @cityofdenton.com required";
                 errorMsg.classList.remove('hidden');
                 return;
             }
 
-            btn.innerText = "Verifying...";
+            btn.innerText = "Processing...";
             errorMsg.classList.add('hidden');
 
-            // --- SET PERSISTENCE BEFORE LOGIN ---
             setPersistence(auth, browserLocalPersistence)
             .then(() => {
                 if (window.isLoginMode) {
+                    // LOGIN
                     return signInWithEmailAndPassword(auth, email, password);
                 } else {
-                    return createUserWithEmailAndPassword(auth, email, password);
+                    // SIGN UP
+                    return createUserWithEmailAndPassword(auth, email, password)
+                        .then((userCredential) => {
+                            // Send Verification Email
+                            return sendEmailVerification(userCredential.user)
+                                .then(() => {
+                                    alert("✅ Account Created!\n\nA verification email has been sent to " + email + ".\n\nPlease check your email (and junk folder) and click the link to activate your account before logging in.");
+                                    signOut(auth); // Force them out until verified
+                                    // Reset UI to login mode
+                                    window.isLoginMode = true;
+                                    window.toggleAuthMode(); // Toggle back visually
+                                    throw new Error("VERIFY_EMAIL_SENT"); // Break chain to stop auto-login
+                                });
+                        });
                 }
             })
             .then((userCredential) => {
-                // On Success: Set the timestamp for the 30-day timer
-                localStorage.setItem('denton_login_time', Date.now().toString());
-                
-                // Note: The onAuthStateChanged listener handles the UI updates
+                // Login Successful Logic
+                if (userCredential && userCredential.user) {
+                    if (!userCredential.user.emailVerified) {
+                        alert("Please verify your email address before logging in.");
+                        signOut(auth);
+                    } else {
+                        localStorage.setItem('denton_login_time', Date.now().toString());
+                    }
+                }
             })
             .catch((error) => {
+                if (error.message === "VERIFY_EMAIL_SENT") return; // Handled above
                 btn.innerText = window.isLoginMode ? "Authenticate" : "Register System";
-                errorMsg.innerText = "Access Denied: " + error.code;
+                errorMsg.innerText = "Error: " + error.code;
                 errorMsg.classList.remove('hidden');
             });
         }
 
         window.performLogout = function() {
             if(!confirm("End secure session?")) return;
-            localStorage.removeItem('denton_login_time'); // Clear timer
+            localStorage.removeItem('denton_login_time');
             signOut(auth);
         }
 
@@ -240,10 +266,9 @@
             document.getElementById('list-sidebar').classList.toggle('-translate-x-full');
         }
 
-        // --- MAP LOGIC UPDATE ---
         window.toggleHistorical = function() {
             viewHistorical = document.getElementById('historical-toggle').checked;
-            renderData(); // Re-run renderData to update map/list
+            renderData();
         }
 
         window.switchView = function(viewName) {
@@ -303,13 +328,11 @@
         }
 
         function renderData() {
-            // 1. Clear everything first
             markersCluster.clearLayers();
             reportMarkers.clear();
             const listContainer = document.getElementById('report-list');
             listContainer.innerHTML = '';
 
-            // 2. Filter logic: If Historical is ON, show all. If OFF, show only NOT resolved.
             const filteredReports = viewHistorical ? allReports : allReports.filter(r => r.status !== 'resolved');
 
             filteredReports.forEach(d => {
@@ -337,6 +360,9 @@
                             </div>
                             <div class="text-sm font-semibold text-gray-800 leading-tight mb-1">${d.address}</div>
                             <div class="text-[11px] text-gray-500 mb-2">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Unit: ${d.unit || 'UNK'}</span>
+                            </div>
                             ${d.lastTechnician ? `<div class="bg-blue-50 p-2 rounded text-[10px] text-blue-800 font-bold mb-2 uppercase">VERIFIED BY: ${d.lastTechnician}</div>` : ''}
                             ${!isResolved ? `<button onclick="resolveReport('${d._id}')" class="w-full bg-navy text-white text-[10px] font-bold py-2 rounded uppercase tracking-widest mt-2">Update / Resolve</button>` : ''}
                         </div>`;
@@ -345,6 +371,7 @@
                     markersCluster.addLayer(marker);
                     reportMarkers.set(d._id, marker);
 
+                    // --- UPDATE FOR REQUEST #1: Add Unit Display Here ---
                     const listItem = document.createElement('div');
                     listItem.className = `p-3 border-b border-white/10 hover:bg-white/5 cursor-pointer transition-colors ${isResolved ? 'opacity-50' : ''}`;
                     listItem.onclick = () => flyToReport(lat, lng, d._id);
@@ -353,7 +380,12 @@
                             <div class="mt-1 w-2 h-2 rounded-full ${isResolved ? 'bg-gray-500' : (isWater ? 'bg-blue-500' : 'bg-red-500')}"></div>
                             <div class="flex-1">
                                 <h4 class="text-white text-sm font-semibold">${d.address}</h4>
-                                <p class="text-[10px] text-gray-400 uppercase">${d.dateTime ? d.dateTime.split('T')[0] : ''}</p>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="bg-blue-900/50 text-blue-200 border border-blue-500/30 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">
+                                        ${d.unit || 'UNK'}
+                                    </span>
+                                    <span class="text-[10px] text-gray-400 uppercase">${d.dateTime ? d.dateTime.split('T')[0] : ''}</span>
+                                </div>
                             </div>
                         </div>`;
                     listContainer.appendChild(listItem);
@@ -549,7 +581,6 @@
             const pwInput = document.getElementById('purge-pass');
             const errorMsg = document.getElementById('purge-error');
             
-            // --- UPDATED PASSWORD (DentonFire1) ---
             if (pwInput.value !== "DentonFire1") {
                 errorMsg.classList.remove('hidden');
                 pwInput.value = '';
@@ -722,8 +753,8 @@
         </div>
     </div>
 
-    <!-- DASHBOARD VIEW -->
-    <div id="dashboard-view" class="hidden absolute inset-0 flex flex-col">
+    <!-- DASHBOARD VIEW (Hidden by default to fix flash) -->
+    <div id="dashboard-view" class="hidden absolute inset-0 flex flex-col" style="display: none;">
         <header class="h-20 bg-white border-b border-gray-200 px-6 flex items-center justify-between z-[70]">
             <div class="flex items-center gap-4">
                 <button onclick="toggleSidebar()" class="bg-navy text-white p-2.5 rounded-lg lg:hidden shadow-md">
