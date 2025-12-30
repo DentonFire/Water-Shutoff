@@ -212,6 +212,7 @@
 
         // Login Logic
         window.isLoginMode = true;
+        window.isSigningUp = false; // Flag to prevent double-popups during signup
 
         window.toggleAuthMode = function() {
             window.isLoginMode = !window.isLoginMode;
@@ -254,24 +255,52 @@
             btn.innerText = "Processing...";
             errorMsg.classList.add('hidden');
 
+            // --- REDIRECT CONFIGURATION ---
+            // This ensures the "Link Expired" page has a "Continue" button back to the site
+            const actionCodeSettings = {
+                url: window.location.href, // Redirect back to this page
+                handleCodeInApp: false
+            };
+
             setPersistence(auth, browserLocalPersistence)
             .then(() => {
                 if (window.isLoginMode) {
+                    // LOGIN
                     return signInWithEmailAndPassword(auth, email, password);
                 } else {
                     // SIGN UP
+                    window.isSigningUp = true; // Set flag so onAuthStateChanged doesn't show resend dialog immediately
                     return createUserWithEmailAndPassword(auth, email, password)
                         .then((userCredential) => {
-                            return sendEmailVerification(userCredential.user);
-                            // We do NOT sign out here. onAuthStateChanged will catch the unverified user 
-                            // and launch the polling modal automatically.
+                            // Send Verification Email with Return URL
+                            return sendEmailVerification(userCredential.user, actionCodeSettings)
+                                .then(() => {
+                                    // REPLACED ALERT WITH MODAL
+                                    document.getElementById('success-email-target').innerText = email;
+                                    document.getElementById('success-modal').classList.remove('hidden');
+                                    
+                                    signOut(auth); // Force them out until verified
+                                    // Reset UI to login mode
+                                    window.isLoginMode = true;
+                                    window.toggleAuthMode(); // Toggle back visually
+                                    window.isSigningUp = false; // Reset flag
+                                    throw new Error("VERIFY_EMAIL_SENT"); // Break chain to stop auto-login logic
+                                });
                         });
                 }
             })
-            .then(() => {
-                // Success logic is handled by onAuthStateChanged
+            .then((userCredential) => {
+                // Login Successful Logic
+                if (userCredential && userCredential.user) {
+                    if (userCredential.user.emailVerified) {
+                        localStorage.setItem('denton_login_time', Date.now().toString());
+                    }
+                    // If not verified, onAuthStateChanged handles the UI (including silent reload)
+                }
             })
             .catch((error) => {
+                if (error.message === "VERIFY_EMAIL_SENT") return; // Handled above
+                window.isSigningUp = false;
                 btn.innerText = window.isLoginMode ? "Authenticate" : "Register System";
                 errorMsg.innerText = "Error: " + error.code;
                 errorMsg.classList.remove('hidden');
@@ -280,11 +309,20 @@
         
         window.resendVerificationEmail = function() {
             const user = auth.currentUser;
+            const actionCodeSettings = {
+                url: window.location.href,
+                handleCodeInApp: false
+            };
+            
             if(user) {
-                sendEmailVerification(user)
+                sendEmailVerification(user, actionCodeSettings)
                 .then(() => alert("Email resent! If your city email scanner clicks it, you will be logged in automatically."))
                 .catch((e) => alert(e.message));
             }
+        }
+
+        window.closeSuccessModal = function() {
+            document.getElementById('success-modal').classList.add('hidden');
         }
 
         window.cancelVerification = function() {
@@ -431,69 +469,6 @@
             });
 
             document.getElementById('count').innerText = allReports.filter(r => r.status !== 'resolved').length;
-        }
-
-        function updateAnalytics() {
-            if (allReports.length === 0) return;
-            const activeCount = allReports.filter(r => r.status !== 'resolved').length;
-            const resolvedCount = allReports.filter(r => r.status === 'resolved').length;
-            const damageCount = allReports.filter(r => r.damage === 'Yes').length;
-            const damagePercent = ((damageCount / allReports.length) * 100).toFixed(0);
-
-            if(document.getElementById('stat-active')) document.getElementById('stat-active').innerText = activeCount;
-            if(document.getElementById('stat-resolved')) document.getElementById('stat-resolved').innerText = resolvedCount;
-            if(document.getElementById('stat-damage')) document.getElementById('stat-damage').innerText = damagePercent + '%';
-
-            const waterCount = allReports.filter(r => r.systemType === 'Water Meter').length;
-            const sprinklerCount = allReports.filter(r => r.systemType !== 'Water Meter').length;
-
-            if (charts.dist) charts.dist.destroy();
-            const distCanvas = document.getElementById('chart-dist');
-            if (distCanvas) {
-                charts.dist = new Chart(distCanvas, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Water Meters', 'Sprinklers'],
-                        datasets: [{
-                            data: [waterCount, sprinklerCount],
-                            backgroundColor: ['#2563eb', '#dc2626'],
-                            borderWidth: 0
-                        }]
-                    },
-                    options: { plugins: { legend: { position: 'bottom' } } }
-                });
-            }
-
-            const last7Days = [...Array(7)].map((_, i) => {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                return d.toISOString().split('T')[0];
-            }).reverse();
-
-            const timelineData = last7Days.map(date => allReports.filter(r => r.dateTime && r.dateTime.startsWith(date)).length);
-
-            if (charts.timeline) charts.timeline.destroy();
-            const timelineCanvas = document.getElementById('chart-timeline');
-            if (timelineCanvas) {
-                charts.timeline = new Chart(timelineCanvas, {
-                    type: 'line',
-                    data: {
-                        labels: last7Days.map(d => d.split('-').slice(1).join('/')),
-                        datasets: [{
-                            label: 'Incidents',
-                            data: timelineData,
-                            borderColor: '#152a40',
-                            backgroundColor: 'rgba(21, 42, 64, 0.1)',
-                            fill: true,
-                            tension: 0.4
-                        }]
-                    },
-                    options: { 
-                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
-                        plugins: { legend: { display: false } }
-                    }
-                });
-            }
         }
 
         window.openCSVModal = () => document.getElementById('csv-modal').classList.remove('hidden');
@@ -656,20 +631,39 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden relative">
 
-    <!-- VERIFICATION MODAL -->
-    <div id="verification-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
+    <!-- SUCCESS ACCOUNT CREATED MODAL (REPLACES ALERT) -->
+    <div id="success-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-navy/95 backdrop-blur-md"></div>
         <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-8 text-center animate-in zoom-in duration-300">
             <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg class="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
             </div>
-            <h3 class="text-xl font-black text-navy mb-2">Check Your Email</h3>
+            <h3 class="text-xl font-black text-navy mb-2">Verification Email Sent</h3>
             <p class="text-sm text-gray-500 mb-6 leading-relaxed">
-                We sent a verification link to <br> <span id="verify-email-target" class="font-bold text-navy">...</span>
+                We sent a link to <span id="success-email-target" class="font-bold text-navy"></span>.
+            </p>
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-left mb-6 text-blue-800">
+                <p class="font-bold mb-1">📢 Important:</p>
+                City email scanners often click links automatically to check for viruses. If you click the link and see <strong>"Link Expired"</strong>, it means the scanner already verified you! Just come back here and log in.
+            </div>
+            <button onclick="window.closeSuccessModal()" class="block w-full bg-navy text-white font-bold py-3 rounded-lg hover:bg-navy-light text-xs uppercase tracking-widest shadow-lg">Return to Login</button>
+        </div>
+    </div>
+
+    <!-- VERIFICATION POLLING MODAL -->
+    <div id="verification-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-navy/95 backdrop-blur-md"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-8 text-center animate-in zoom-in duration-300">
+            <div class="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h3 class="text-xl font-black text-navy mb-2">Pending Verification</h3>
+            <p class="text-sm text-gray-500 mb-6 leading-relaxed">
+                Waiting for verification of <br> <span id="verify-email-target" class="font-bold text-navy">...</span>
             </p>
             <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-left mb-6 text-blue-800">
                 <p class="font-bold mb-1">💡 Pro Tip:</p>
-                City email scanners often click links automatically. <strong>We are auto-checking your status</strong> right now. If the scanner clicks it, you will be logged in automatically!
+                <strong>We are auto-checking your status.</strong> If the city scanner clicks your email link, you will be logged in automatically right here!
             </div>
             
             <div class="space-y-3">
@@ -945,3 +939,7 @@
     </div>
 </body>
 </html>
+
+### File 2: `water_shutoff.html` (Survey Form)
+**Changes:**
+* **Added `actionCodeSettings`:** Ensures consistency between both apps.
