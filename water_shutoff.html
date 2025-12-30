@@ -21,7 +21,7 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- FIREBASE CONFIGURATION ---
@@ -39,14 +39,35 @@
         const db = getFirestore(app);
         const appId = 'denton-fire-tools';
 
-        const initAuth = async () => {
-            try { await signInAnonymously(auth); } 
-            catch (e) { console.error("Auth Error:", e); alert("Database Connection Error: " + e.message); }
-        };
-        initAuth();
-
         let currentUser = null;
-        onAuthStateChanged(auth, (user) => { currentUser = user; });
+
+        // --- AUTH PROTECTION ---
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                // Not logged in -> Redirect to Login Page WITH PARAMETER
+                // This tells index.html to send them back here after login
+                window.location.href = "index.html?redirect=water_shutoff";
+            } else if (!user.email.endsWith('@cityofdenton.com')) {
+                // Logged in but wrong email -> Redirect
+                alert("Unauthorized Access");
+                window.location.href = "index.html";
+            } else {
+                // --- 30-DAY EXPIRATION CHECK ---
+                const loginTime = localStorage.getItem('denton_login_time');
+                const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+                
+                if (loginTime && (Date.now() - parseInt(loginTime) > thirtyDays)) {
+                    alert("Session Expired. Please log in again.");
+                    localStorage.removeItem('denton_login_time');
+                    signOut(auth);
+                    window.location.href = "index.html?redirect=water_shutoff";
+                    return;
+                }
+
+                // Authorized
+                currentUser = user;
+            }
+        });
 
         // --- UNIT MANAGEMENT ---
         const defaultUnits = ["BAT1", "BAT2", "RIV9", "E1", "T1", "E2", "E3", "E4", "E6", "Q5", "E7", "E8", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "R1", "BLK3"];
@@ -527,9 +548,6 @@ Logged via Denton Fire Dept Water Shutoff Survey`;
             </div>
         </div>
     </div>
-    <!-- ============================================ -->
-    <!-- NEW FLOATING QR CODE BUTTON & MODAL END -->
-    <!-- ============================================ -->
 
     <!-- MODAL: FIRE WATCH REMINDER -->
     <div id="firewatch-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-navy/90 hidden backdrop-blur-sm">
