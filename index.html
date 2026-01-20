@@ -4,234 +4,250 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Command | Water Shutoff</title>
-    
     <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
-    
-    <!-- Leaflet Map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-
-    <!-- Leaflet MarkerCluster -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-
-    <!-- Chart.js for Analytics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: { 
-                        navy: { DEFAULT: '#152a40', light: '#1e3a58', glass: 'rgba(21, 42, 64, 0.8)' },
-                        red: { DEFAULT: '#bf2726', hover: '#991f1e' },
-                        yellow: '#f9c031',
-                        slate: { 850: '#151f2e' }
-                    },
-                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-                    animation: {
-                        'scan': 'scan-line 3s linear infinite',
-                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                    },
-                    keyframes: {
-                        'scan-line': {
-                            '0%': { backgroundPosition: '100% 0' },
-                            '100%': { backgroundPosition: '-100% 0' },
-                        }
-                    }
+                    colors: { navy: { DEFAULT: '#152a40', light: '#1e3a58' }, red: '#bf2726', yellow: '#f9c031' },
+                    animation: { 'scan': 'scan-line 3s linear infinite' },
+                    keyframes: { 'scan-line': { '0%': { backgroundPosition: '100% 0' }, '100%': { backgroundPosition: '-100% 0' } } }
                 }
             }
         }
     </script>
-    
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .glass-dark { background: rgba(21, 42, 64, 0.95); backdrop-filter: blur(12px); border-right: 1px solid rgba(255, 255, 255, 0.1); }
+        .glass-dark { background: rgba(21, 42, 64, 0.95); backdrop-filter: blur(12px); }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
-        
-        #login-overlay { 
-            background-color: #152a40; 
-            background-image: url('https://www.transparenttextures.com/patterns/cubes.png'), radial-gradient(circle at top right, #1e3a58, #152a40);
-            background-repeat: repeat, no-repeat;
-        }
-
+        #login-overlay { background-color: #152a40; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'), radial-gradient(circle at top right, #1e3a58, #152a40); }
         .leaflet-pane { z-index: 0 !important; }
         @keyframes pulse-ring { 0% { transform: scale(0.33); opacity: 1; } 80%, 100% { opacity: 0; } }
-        .marker-pulse { position: relative; }
-        .marker-pulse::before { content: ''; position: absolute; left: 50%; top: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid white; animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
-        .marker-cluster-custom { background: rgba(21, 42, 64, 0.9); border: 2px solid rgba(255, 255, 255, 0.8); color: white; border-radius: 50%; text-align: center; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        
+        .marker-pulse::before { content: ''; position: absolute; left: 50%; top: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid white; animation: pulse-ring 2s infinite; }
+        .marker-cluster-custom { background: rgba(21, 42, 64, 0.9); border: 2px solid rgba(255,255,255,0.8); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
         .scan-line-gradient { background: linear-gradient(90deg, #152a40 0%, #ef4444 50%, #152a40 100%); background-size: 200% 100%; }
-
         .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
-        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: #152a40; }
+        .slider { position: absolute; cursor: pointer; inset: 0; background: #ccc; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background: #152a40; }
         input:checked + .slider:before { transform: translateX(20px); }
+        #map-loading { position: absolute; inset: 0; background: rgba(248,250,252,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        #map-loading.hidden { opacity: 0; pointer-events: none; }
+        .loading-spinner { width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top-color: #152a40; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #offline-banner { display: none; position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(90deg, #f59e0b, #d97706); color: white; padding: 8px 16px; text-align: center; font-weight: 700; font-size: 12px; z-index: 10000; text-transform: uppercase; }
+        #offline-banner.show { display: block; }
     </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden relative">
+    <div id="offline-banner">⚠️ You are currently offline. Some features may be unavailable.</div>
 
+    <div id="success-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-navy/95 backdrop-blur-md"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 text-center">
+            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg></div>
+            <h3 class="text-xl font-black text-navy mb-2">Verification Email Sent</h3>
+            <p class="text-sm text-gray-500 mb-6">We sent a link to <span id="success-email-target" class="font-bold text-navy"></span>.</p>
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-left mb-6 text-blue-800"><p class="font-bold mb-1">📢 Important:</p>City email scanners often click links automatically. If you see "Link Expired", the scanner already verified you! Just log in.</div>
+            <button onclick="window.closeSuccessModal()" class="block w-full bg-navy text-white font-bold py-3 rounded-lg text-xs uppercase tracking-widest">Return to Login</button>
+        </div>
+    </div>
+
+    <div id="verification-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-navy/95 backdrop-blur-md"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 text-center">
+            <div class="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6"><svg class="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+            <h3 class="text-xl font-black text-navy mb-2">Pending Verification</h3>
+            <p class="text-sm text-gray-500 mb-6">Waiting for <span id="verify-email-target" class="font-bold text-navy">...</span></p>
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-left mb-6 text-blue-800"><strong>We are auto-checking your status.</strong> If the city scanner clicks your link, you'll be logged in automatically!</div>
+            <div class="space-y-3">
+                <button onclick="window.resendVerificationEmail()" class="text-xs text-navy font-bold hover:underline">Resend Email</button>
+                <button onclick="window.cancelVerification()" class="block w-full border border-gray-300 text-gray-500 font-bold py-3 rounded-lg text-xs uppercase tracking-widest">Back to Login</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="purge-modal" class="fixed inset-0 z-[10002] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-red-950/90 backdrop-blur-md" onclick="closePurgeModal()"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl border-4 border-red-600">
+            <div class="bg-red-600 p-6 text-white text-center"><svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg><h3 class="text-xl font-black uppercase">Authorize Purge</h3><p class="text-red-100 text-[10px] font-bold mt-1 uppercase tracking-widest">Administrative Override Required</p></div>
+            <div class="p-6 space-y-4">
+                <p class="text-[11px] text-gray-500 text-center">This action is <span class="text-red-600 font-black">PERMANENT</span> and cannot be undone.</p>
+                <div><label class="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1 text-center">Secondary Admin Password</label><input type="password" id="purge-pass" class="w-full bg-slate-50 border-2 border-slate-200 p-3 rounded-xl text-center text-lg font-black tracking-[0.3em] focus:border-red-600 focus:outline-none"><p id="purge-error" class="text-red-600 text-[10px] font-black mt-2 text-center hidden">Access Denied: Invalid Password</p></div>
+                <div class="grid grid-cols-2 gap-3"><button onclick="closePurgeModal()" class="py-3 rounded-xl bg-slate-100 text-slate-500 font-black text-[10px] uppercase tracking-widest">Cancel</button><button onclick="submitPurge()" class="py-3 rounded-xl bg-red-600 text-white font-black text-[10px] uppercase tracking-widest">Confirm Purge</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="csv-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-navy/80 backdrop-blur-sm" onclick="closeCSVModal()"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h3 class="text-lg font-black uppercase text-navy mb-4">Export Filtered Data</h3>
+            <div class="space-y-4">
+                <div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Status</label><select id="csv-filter-status" class="w-full bg-slate-50 border p-2 rounded-lg text-sm"><option value="all">All Statuses</option><option value="active">Active Only</option><option value="resolved">Resolved Only</option></select></div>
+                <div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">System Type</label><select id="csv-filter-type" class="w-full bg-slate-50 border p-2 rounded-lg text-sm"><option value="all">All Types</option><option value="Water Meter">Water Meters Only</option><option value="Sprinkler System">Sprinklers Only</option></select></div>
+                <div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Timeframe</label><select id="csv-filter-time" class="w-full bg-slate-50 border p-2 rounded-lg text-sm"><option value="all">All Time</option><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option></select></div>
+                <button onclick="processCSVDownload()" class="w-full bg-navy text-white font-black py-3 rounded-xl uppercase tracking-widest text-xs mt-4">Generate CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="resolve-modal" class="fixed inset-0 z-[10000] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-navy/80 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-navy p-6 text-white flex justify-between"><div><h3 class="text-xl font-black uppercase tracking-tight">Update Report</h3><p id="modal-address" class="text-blue-200 text-xs mt-1">Address...</p></div><button onclick="closeModal()" class="text-white/50 hover:text-white">✕</button></div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="btn-mode-update" onclick="setUpdateMode('update')" class="p-4 rounded-xl border-2 transition-all text-center"><span class="font-black text-xs uppercase block">Status Update</span><span class="text-[9px] uppercase font-bold opacity-60">Add Note Only</span></button>
+                    <button id="btn-mode-resolve" onclick="setUpdateMode('resolved')" class="p-4 rounded-xl border-2 transition-all text-center"><span class="font-black text-xs uppercase block">Service Restored</span><span class="text-[9px] uppercase font-bold opacity-60">Resolve Shutoff</span></button>
+                </div>
+                <div class="space-y-4">
+                    <div><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Verified By</label><input type="text" id="tech-name" placeholder="Last Name" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm"></div>
+                    <div id="notes-section" class="hidden"><label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Update Notes</label><textarea id="res-notes" rows="3" placeholder="Enter status update details..." class="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm"></textarea></div>
+                </div>
+                <button onclick="submitUpdate()" class="w-full bg-navy text-white font-black py-4 rounded-xl uppercase tracking-widest text-xs"><span id="submit-btn-text">SUBMIT</span></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="login-overlay" class="fixed inset-0 z-[9999] flex items-center justify-center px-4">
+        <div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div>
+            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-16 w-auto mx-auto mb-4 drop-shadow-lg object-contain">
+            <h2 id="auth-mode-title" class="text-2xl font-black text-white mb-1 uppercase tracking-tight">Admin Portal</h2>
+            <p class="text-blue-200 text-xs mb-6 font-medium tracking-wide uppercase">Water Shutoff Command</p>
+            <div class="space-y-3">
+                <input type="email" id="email" placeholder="USER EMAIL" class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-wider focus:outline-none focus:ring-2 focus:ring-yellow text-sm">
+                <input type="password" id="password" onkeyup="handleEnter(event)" placeholder="PASSWORD" class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-wider focus:outline-none focus:ring-2 focus:ring-yellow text-sm">
+                <p id="login-error" class="text-red-400 font-bold text-xs hidden bg-red-900/30 py-1 rounded border border-red-500/30">Invalid Access</p>
+                <button id="login-btn" onclick="handleAuth()" class="w-full bg-white text-navy font-black py-3 rounded-lg hover:bg-gray-100 active:scale-95 transition-all shadow-lg uppercase tracking-wider text-xs">Authenticate</button>
+                <p id="auth-toggle-text" onclick="toggleAuthMode()" class="text-gray-400 text-[10px] mt-4 cursor-pointer hover:text-white uppercase tracking-widest">Need access? <span class="underline">Create Account</span></p>
+            </div>
+            <div class="mt-6 flex items-center justify-center gap-2 opacity-60"><div id="secure-light" class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div><p id="secure-text" class="text-[10px] font-mono tracking-widest uppercase text-yellow-200">CHECKING SECURITY...</p></div>
+        </div>
+    </div>
+
+    <div id="dashboard-view" class="hidden absolute inset-0 flex flex-col" style="display: none;">
+        <header class="h-20 bg-white border-b border-gray-200 px-6 flex items-center justify-between z-[70]">
+            <div class="flex items-center gap-4">
+                <button onclick="toggleSidebar()" class="bg-navy text-white p-2.5 rounded-lg lg:hidden shadow-md"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
+                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-10">
+                <div class="hidden sm:block"><h1 class="text-navy font-black uppercase text-base leading-none">Command Center</h1><div class="flex items-center gap-2 mt-1"><span id="status-indicator" class="w-2 h-2 rounded-full bg-yellow-400"></span><p id="status-text" class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Connecting...</p></div></div>
+            </div>
+            <div class="hidden md:flex gap-8 items-center border-l border-r border-gray-100 px-8">
+                <div class="text-center"><span id="count" class="block text-2xl font-black text-navy leading-none">--</span><span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Active Reports</span></div>
+                <div class="flex gap-4"><div class="flex flex-col items-center"><div class="w-3 h-3 rounded-full bg-blue-600 mb-1 border border-white shadow-sm"></div><span class="text-[8px] font-bold text-gray-400 uppercase">Meter</span></div><div class="flex flex-col items-center"><div class="w-3 h-3 rounded-sm bg-red-600 mb-1 border border-white shadow-sm"></div><span class="text-[8px] font-bold text-gray-400 uppercase">System</span></div></div>
+            </div>
+            <div class="flex items-center gap-3">
+                <nav class="bg-slate-100 p-1 rounded-xl hidden lg:flex"><button id="nav-map" onclick="switchView('map')" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase bg-navy text-white transition-all shadow-sm">Map</button><button id="nav-analytics" onclick="switchView('analytics')" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase text-navy hover:bg-white transition-all">Analytics</button></nav>
+                <a href="water_shutoff.html" class="bg-navy hover:bg-navy-light text-white text-[10px] font-black py-2.5 px-5 rounded-lg transition-all shadow flex items-center gap-2 uppercase tracking-widest"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>New Report</a>
+                <button onclick="performLogout()" class="text-gray-400 hover:text-red-600 p-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg></button>
+            </div>
+        </header>
+        <main class="flex-1 relative flex">
+            <aside id="list-sidebar" class="absolute inset-y-0 left-0 w-80 glass-dark z-[60] transform -translate-x-full lg:translate-x-0 transition-transform duration-300 flex flex-col border-r border-white/10 shadow-2xl">
+                <div class="p-4 border-b border-white/10 bg-navy/20 flex items-center justify-between"><span class="text-white font-black uppercase tracking-wider text-xs">Incident Log</span><div class="flex items-center gap-2"><span class="text-[9px] text-gray-400 uppercase font-bold">Historical</span><label class="switch"><input type="checkbox" id="historical-toggle" onchange="toggleHistorical()"><span class="slider"></span></label></div></div>
+                <div id="report-list" class="flex-1 overflow-y-auto"></div>
+            </aside>
+            <div class="flex-1 relative overflow-hidden">
+                <div id="map-container" class="absolute inset-0">
+                    <div id="map-loading"><div class="loading-spinner mb-4"></div><p class="text-sm font-bold text-gray-500 uppercase tracking-wider">Loading Map Data...</p></div>
+                    <div id="map" class="w-full h-full bg-slate-200"></div>
+                    <div class="absolute bottom-6 left-0 w-full z-50 flex justify-center pointer-events-none px-4">
+                        <div class="pointer-events-auto bg-white rounded-full p-2 shadow-floating flex items-center gap-1 border border-gray-200 scale-90 sm:scale-100">
+                            <button onclick="openCSVModal()" class="flex items-center gap-2 px-6 py-2.5 rounded-full hover:bg-blue-50 text-navy font-black text-[10px] uppercase tracking-widest"><span class="bg-blue-600 text-white p-1 rounded-full"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></span>Download CSV</button>
+                            <div class="w-px h-6 bg-gray-200"></div>
+                            <button onclick="nukeDatabasePrompt()" class="flex items-center gap-2 px-6 py-2.5 rounded-full hover:bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-widest"><span class="bg-red-600 text-white p-1 rounded-full"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></span>Purge All</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="analytics-container" class="absolute inset-0 bg-slate-50 overflow-y-auto p-8 hidden">
+                    <div class="max-w-7xl mx-auto space-y-8">
+                        <div class="flex justify-between items-end flex-wrap gap-4"><div><h2 class="text-3xl font-black text-navy uppercase">Chief's Dashboard</h2><p class="text-gray-400 font-bold uppercase tracking-widest text-xs mt-1">Incident Intelligence & Analytics</p></div><div class="text-[10px] font-black bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100 uppercase text-gray-400">Live Sync Enabled</div></div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><span class="text-blue-600 font-black text-[10px] uppercase tracking-widest">Active Incidents</span><h3 id="stat-active" class="text-4xl font-black text-navy mt-1">--</h3><p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Requiring Verification</p></div>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><span class="text-green-600 font-black text-[10px] uppercase tracking-widest">Resolved</span><h3 id="stat-resolved" class="text-4xl font-black text-navy mt-1">--</h3><p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Services Restored</p></div>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><span class="text-red-600 font-black text-[10px] uppercase tracking-widest">Damage Reports</span><h3 id="stat-damage" class="text-4xl font-black text-navy mt-1">--</h3><p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Systems Damaged</p></div>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><span class="text-orange-600 font-black text-[10px] uppercase tracking-widest">🔥 Fire Watch</span><h3 id="stat-firewatch" class="text-4xl font-black text-navy mt-1">--</h3><p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Watch Orders Issued</p></div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100"><h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">Activity Timeline (Last 7 Days)</h4><div class="h-[280px]"><canvas id="chart-timeline"></canvas></div></div>
+                            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center"><h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6 w-full">System Type Breakdown</h4><div class="max-w-[280px] w-full"><canvas id="chart-dist"></canvas></div></div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-12">
+                            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100"><h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">Unit Performance (Top 10)</h4><div class="h-[300px]"><canvas id="chart-units"></canvas></div></div>
+                            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100"><h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">Peak Hours Analysis</h4><div class="h-[300px]"><canvas id="chart-hourly"></canvas></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, doc, updateDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
-            authDomain: "denton-fire-tools.firebaseapp.com",
-            projectId: "denton-fire-tools",
-            storageBucket: "denton-fire-tools.firebasestorage.app",
-            messagingSenderId: "751121603550",
-            appId: "1:751121603550:web:3a8f25b990d45038ae1b4f"
-        };
-
+        const firebaseConfig = { apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA", authDomain: "denton-fire-tools.firebaseapp.com", projectId: "denton-fire-tools", storageBucket: "denton-fire-tools.firebasestorage.app", messagingSenderId: "751121603550", appId: "1:751121603550:web:3a8f25b990d45038ae1b4f" };
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = 'denton-fire-tools';
         
-        let map;
-        let markersCluster;
-        let allReports = [];
-        let reportMarkers = new Map(); 
-        let viewHistorical = false;
-        let currentReportId = null;
-        let updateMode = 'resolved';
-        let charts = {};
-        let verificationInterval = null;
+        let map, markersCluster, allReports = [], reportMarkers = new Map(), viewHistorical = false, currentReportId = null, updateMode = 'resolved', charts = {}, verificationInterval = null, isOnline = navigator.onLine;
 
-        // --- SAFE REDIRECT HELPER ---
-        function safeRedirect(target) {
-            try {
-                window.location.assign(target);
-            } catch (e) {
-                console.warn("Redirect blocked by environment:", e);
-            }
-        }
+        function updateOnlineStatus() { isOnline = navigator.onLine; const banner = document.getElementById('offline-banner'); if (!isOnline) banner.classList.add('show'); else banner.classList.remove('show'); }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
 
-        // --- AUTH LOGIC START ---
-        
-        // This function handles the "Success" state after checks pass
+        function safeRedirect(target) { try { window.location.assign(target); } catch (e) { console.warn("Redirect blocked:", e); } }
+
         function grantAccess(user) {
-            // Stop any polling if running
             if (verificationInterval) clearInterval(verificationInterval);
             document.getElementById('verification-modal').classList.add('hidden');
-
-            // Check 2: 30-Day Expiration
             const loginTime = localStorage.getItem('denton_login_time');
-            const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-            
-            if (loginTime && (Date.now() - parseInt(loginTime) > thirtyDays)) {
-                alert("Session Expired. Please log in again.");
-                localStorage.removeItem('denton_login_time');
-                signOut(auth);
-                return;
-            }
-
-            // Check 3: Redirect Handling
+            if (loginTime && (Date.now() - parseInt(loginTime) > 30*24*60*60*1000)) { alert("Session Expired."); localStorage.removeItem('denton_login_time'); signOut(auth); return; }
             const urlParams = new URLSearchParams(window.location.search);
-            const redirectTarget = urlParams.get('redirect');
-            if (redirectTarget === 'water_shutoff') {
-                safeRedirect('water_shutoff.html');
-                return;
-            }
-
-            // --- ACCESS GRANTED ---
+            if (urlParams.get('redirect') === 'water_shutoff') { safeRedirect('water_shutoff.html'); return; }
             document.getElementById('login-overlay').style.display = 'none';
-            document.getElementById('dashboard-view').style.display = 'flex'; 
-            
+            document.getElementById('dashboard-view').style.display = 'flex';
             const statusLight = document.getElementById('secure-light');
             const statusText = document.getElementById('secure-text');
-            if (statusLight && statusText) {
-                statusLight.classList.add('bg-green-500', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
-                statusText.innerText = "SECURE CONNECTION // " + user.email;
-                statusText.classList.remove('text-red-300');
-            }
-
-            setTimeout(() => { 
-                if (!map) initMap();
-                map.invalidateSize(); 
-                listenToData();
-            }, 500);
+            if (statusLight) { statusLight.classList.remove('bg-yellow-400', 'animate-pulse'); statusLight.classList.add('bg-green-500'); }
+            if (statusText) { statusText.innerText = "SECURE CONNECTION"; statusText.classList.remove('text-yellow-200'); statusText.classList.add('text-green-300'); }
+            setTimeout(() => { if (!map) initMap(); map.invalidateSize(); listenToData(); updateOnlineStatus(); }, 500);
         }
 
         function startVerificationPolling(user) {
             const modal = document.getElementById('verification-modal');
-            const emailSpan = document.getElementById('verify-email-target');
-            
-            if (emailSpan) emailSpan.innerText = user.email;
+            document.getElementById('verify-email-target').innerText = user.email;
             modal.classList.remove('hidden');
-
-            // Poll every 3 seconds
             if (verificationInterval) clearInterval(verificationInterval);
-            
-            verificationInterval = setInterval(() => {
-                user.reload().then(() => {
-                    if (user.emailVerified) {
-                        // SUCCESS! Scanner or user clicked it.
-                        clearInterval(verificationInterval);
-                        modal.innerHTML = `
-                            <div class="p-6 text-center">
-                                <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✓</div>
-                                <h3 class="text-xl font-bold text-navy mb-2">Verified!</h3>
-                                <p class="text-sm text-gray-500">Accessing Command Center...</p>
-                            </div>
-                        `;
-                        setTimeout(() => grantAccess(user), 1500);
-                    }
-                });
-            }, 3000);
+            verificationInterval = setInterval(() => { user.reload().then(() => { if (user.emailVerified) { clearInterval(verificationInterval); modal.innerHTML = '<div class="p-6 text-center"><div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✓</div><h3 class="text-xl font-bold text-navy mb-2">Verified!</h3><p class="text-sm text-gray-500">Accessing...</p></div>'; setTimeout(() => grantAccess(user), 1500); } }); }, 3000);
         }
 
-        // Main Listener
         onAuthStateChanged(auth, (user) => {
-            if (user) {
-                if (!user.emailVerified) {
-                    // Don't sign out. Just show the polling modal.
-                    startVerificationPolling(user);
-                } else {
-                    // Already Verified
-                    grantAccess(user);
-                }
-            } else {
-                // Logged Out
-                document.getElementById('login-overlay').style.display = 'flex';
-                document.getElementById('dashboard-view').style.display = 'none';
-                document.getElementById('verification-modal').classList.add('hidden');
-                if(verificationInterval) clearInterval(verificationInterval);
-            }
+            if (user) { if (!user.emailVerified) startVerificationPolling(user); else grantAccess(user); }
+            else { document.getElementById('login-overlay').style.display = 'flex'; document.getElementById('dashboard-view').style.display = 'none'; document.getElementById('verification-modal').classList.add('hidden'); if(verificationInterval) clearInterval(verificationInterval); const sl = document.getElementById('secure-light'); const st = document.getElementById('secure-text'); if(sl) { sl.classList.remove('bg-green-500'); sl.classList.add('bg-yellow-400', 'animate-pulse'); } if(st) { st.innerText = 'CHECKING SECURITY...'; st.classList.remove('text-green-300'); st.classList.add('text-yellow-200'); } }
         });
 
-        // --- AUTH LOGIC END ---
-
-        // Login Logic
         window.isLoginMode = true;
-        window.isSigningUp = false; // Flag to prevent double-popups during signup
-
         window.toggleAuthMode = function() {
             window.isLoginMode = !window.isLoginMode;
-            const title = document.getElementById('auth-mode-title');
-            const btn = document.getElementById('login-btn');
-            const toggleText = document.getElementById('auth-toggle-text');
-            const errorMsg = document.getElementById('login-error');
-            
-            errorMsg.classList.add('hidden');
-
-            if (window.isLoginMode) {
-                title.innerText = "Admin Portal";
-                btn.innerText = "Authenticate";
-                toggleText.innerHTML = "Need access? <span class='underline'>Create Account</span>";
-            } else {
-                title.innerText = "Create Account";
-                btn.innerText = "Register System";
-                toggleText.innerHTML = "Have credentials? <span class='underline'>Log In</span>";
-            }
+            document.getElementById('auth-mode-title').innerText = window.isLoginMode ? "Admin Portal" : "Create Account";
+            document.getElementById('login-btn').innerText = window.isLoginMode ? "Authenticate" : "Register System";
+            document.getElementById('auth-toggle-text').innerHTML = window.isLoginMode ? "Need access? <span class='underline'>Create Account</span>" : "Have credentials? <span class='underline'>Log In</span>";
+            document.getElementById('login-error').classList.add('hidden');
         }
 
         window.handleAuth = function() {
@@ -239,151 +255,39 @@
             const password = document.getElementById('password').value;
             const errorMsg = document.getElementById('login-error');
             const btn = document.getElementById('login-btn');
-
-            if (!email || !password) {
-                errorMsg.innerText = "Enter Email & Password";
-                errorMsg.classList.remove('hidden');
-                return;
-            }
-
-            if (!email.endsWith('@cityofdenton.com')) {
-                errorMsg.innerText = "Restricted: @cityofdenton.com required";
-                errorMsg.classList.remove('hidden');
-                return;
-            }
-
-            btn.innerText = "Processing...";
-            errorMsg.classList.add('hidden');
-
-            // --- REDIRECT CONFIGURATION ---
-            // This ensures the "Link Expired" page has a "Continue" button back to the site
-            const actionCodeSettings = {
-                url: window.location.href, // Redirect back to this page
-                handleCodeInApp: false
-            };
-
-            setPersistence(auth, browserLocalPersistence)
-            .then(() => {
-                if (window.isLoginMode) {
-                    // LOGIN
-                    return signInWithEmailAndPassword(auth, email, password);
-                } else {
-                    // SIGN UP
-                    window.isSigningUp = true; // Set flag so onAuthStateChanged doesn't show resend dialog immediately
-                    return createUserWithEmailAndPassword(auth, email, password)
-                        .then((userCredential) => {
-                            // Send Verification Email with Return URL
-                            return sendEmailVerification(userCredential.user, actionCodeSettings)
-                                .then(() => {
-                                    // REPLACED ALERT WITH MODAL
-                                    document.getElementById('success-email-target').innerText = email;
-                                    document.getElementById('success-modal').classList.remove('hidden');
-                                    
-                                    signOut(auth); // Force them out until verified
-                                    // Reset UI to login mode
-                                    window.isLoginMode = true;
-                                    window.toggleAuthMode(); // Toggle back visually
-                                    window.isSigningUp = false; // Reset flag
-                                    throw new Error("VERIFY_EMAIL_SENT"); // Break chain to stop auto-login logic
-                                });
-                        });
-                }
-            })
-            .then((userCredential) => {
-                // Login Successful Logic
-                if (userCredential && userCredential.user) {
-                    if (userCredential.user.emailVerified) {
-                        localStorage.setItem('denton_login_time', Date.now().toString());
-                    }
-                    // If not verified, onAuthStateChanged handles the UI (including silent reload)
-                }
-            })
-            .catch((error) => {
-                if (error.message === "VERIFY_EMAIL_SENT") return; // Handled above
-                window.isSigningUp = false;
-                btn.innerText = window.isLoginMode ? "Authenticate" : "Register System";
-                errorMsg.innerText = "Error: " + error.code;
-                errorMsg.classList.remove('hidden');
-            });
+            if (!email || !password) { errorMsg.innerText = "Enter Email & Password"; errorMsg.classList.remove('hidden'); return; }
+            if (!email.endsWith('@cityofdenton.com')) { errorMsg.innerText = "Restricted: @cityofdenton.com required"; errorMsg.classList.remove('hidden'); return; }
+            btn.innerText = "Processing..."; errorMsg.classList.add('hidden');
+            const actionCodeSettings = { url: window.location.href, handleCodeInApp: false };
+            setPersistence(auth, browserLocalPersistence).then(() => {
+                if (window.isLoginMode) return signInWithEmailAndPassword(auth, email, password);
+                else return createUserWithEmailAndPassword(auth, email, password).then(uc => sendEmailVerification(uc.user, actionCodeSettings).then(() => { document.getElementById('success-email-target').innerText = email; document.getElementById('success-modal').classList.remove('hidden'); signOut(auth); window.isLoginMode = true; window.toggleAuthMode(); throw new Error("VERIFY_EMAIL_SENT"); }));
+            }).then(uc => { if (uc?.user?.emailVerified) localStorage.setItem('denton_login_time', Date.now().toString()); })
+            .catch(e => { if (e.message === "VERIFY_EMAIL_SENT") return; btn.innerText = window.isLoginMode ? "Authenticate" : "Register System"; errorMsg.innerText = "Error: " + e.code; errorMsg.classList.remove('hidden'); });
         }
-        
-        window.resendVerificationEmail = function() {
-            const user = auth.currentUser;
-            const actionCodeSettings = {
-                url: window.location.href,
-                handleCodeInApp: false
-            };
-            
-            if(user) {
-                sendEmailVerification(user, actionCodeSettings)
-                .then(() => alert("Email resent! If your city email scanner clicks it, you will be logged in automatically."))
-                .catch((e) => alert(e.message));
-            }
-        }
-
-        window.closeSuccessModal = function() {
-            document.getElementById('success-modal').classList.add('hidden');
-        }
-
-        window.cancelVerification = function() {
-            signOut(auth);
-            document.getElementById('verification-modal').classList.add('hidden');
-            if(verificationInterval) clearInterval(verificationInterval);
-        }
-
-        window.performLogout = function() {
-            if(!confirm("End secure session?")) return;
-            localStorage.removeItem('denton_login_time');
-            signOut(auth);
-        }
-
+        window.resendVerificationEmail = function() { const user = auth.currentUser; if(user) sendEmailVerification(user, { url: window.location.href }).then(() => alert("Email resent!")).catch(e => alert(e.message)); }
+        window.closeSuccessModal = function() { document.getElementById('success-modal').classList.add('hidden'); }
+        window.cancelVerification = function() { signOut(auth); document.getElementById('verification-modal').classList.add('hidden'); if(verificationInterval) clearInterval(verificationInterval); }
+        window.performLogout = function() { if(!confirm("End secure session?")) return; localStorage.removeItem('denton_login_time'); signOut(auth); }
         window.handleEnter = function(e) { if (e.key === 'Enter') window.handleAuth(); }
-
-        window.toggleSidebar = function() {
-            document.getElementById('list-sidebar').classList.toggle('-translate-x-full');
-        }
-
-        window.toggleHistorical = function() {
-            viewHistorical = document.getElementById('historical-toggle').checked;
-            renderData();
-        }
+        window.toggleSidebar = function() { document.getElementById('list-sidebar').classList.toggle('-translate-x-full'); }
+        window.toggleHistorical = function() { viewHistorical = document.getElementById('historical-toggle').checked; renderData(); }
 
         window.switchView = function(viewName) {
             const mapArea = document.getElementById('map-container');
             const analyticsArea = document.getElementById('analytics-container');
             const mapBtn = document.getElementById('nav-map');
             const anBtn = document.getElementById('nav-analytics');
-
-            if (viewName === 'analytics') {
-                mapArea.classList.add('hidden');
-                analyticsArea.classList.remove('hidden');
-                anBtn.classList.add('bg-navy', 'text-white');
-                anBtn.classList.remove('text-navy');
-                mapBtn.classList.remove('bg-navy', 'text-white');
-                mapBtn.classList.add('text-navy');
-                updateAnalytics();
-            } else {
-                analyticsArea.classList.add('hidden');
-                mapArea.classList.remove('hidden');
-                mapBtn.classList.add('bg-navy', 'text-white');
-                mapBtn.classList.remove('text-navy');
-                anBtn.classList.remove('bg-navy', 'text-white');
-                anBtn.classList.add('text-navy');
-                if(map) map.invalidateSize();
-            }
+            if (viewName === 'analytics') { mapArea.classList.add('hidden'); analyticsArea.classList.remove('hidden'); anBtn.classList.add('bg-navy', 'text-white'); anBtn.classList.remove('text-navy'); mapBtn.classList.remove('bg-navy', 'text-white'); mapBtn.classList.add('text-navy'); updateAnalytics(); }
+            else { analyticsArea.classList.add('hidden'); mapArea.classList.remove('hidden'); mapBtn.classList.add('bg-navy', 'text-white'); mapBtn.classList.remove('text-navy'); anBtn.classList.remove('bg-navy', 'text-white'); anBtn.classList.add('text-navy'); if(map) map.invalidateSize(); }
         }
 
         function initMap() {
             if (map) return;
             map = L.map('map', { zoomControl: false }).setView([33.2148, -97.1331], 13);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; CARTO', maxZoom: 20
-            }).addTo(map);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', maxZoom: 20 }).addTo(map);
             L.control.zoom({ position: 'bottomright' }).addTo(map);
-            markersCluster = L.markerClusterGroup({
-                iconCreateFunction: (cluster) => L.divIcon({ html: `<div><span>${cluster.getChildCount()}</span></div>`, className: 'marker-cluster-custom', iconSize: L.point(40, 40) }),
-                showCoverageOnHover: false, maxClusterRadius: 40
-            });
+            markersCluster = L.markerClusterGroup({ iconCreateFunction: (cluster) => L.divIcon({ html: '<div><span>'+cluster.getChildCount()+'</span></div>', className: 'marker-cluster-custom', iconSize: L.point(40, 40) }), showCoverageOnHover: false, maxClusterRadius: 40 });
             map.addLayer(markersCluster);
         }
 
@@ -391,555 +295,123 @@
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs');
             onSnapshot(q, (snapshot) => {
                 allReports = snapshot.docs.map(doc => ({ ...doc.data(), _id: doc.id }));
-                renderData();
-                updateAnalytics();
+                renderData(); updateAnalytics();
+                const mapLoading = document.getElementById('map-loading'); if (mapLoading) mapLoading.classList.add('hidden');
                 document.getElementById('status-indicator').className = "w-2 h-2 rounded-full bg-green-500 shadow-sm";
                 document.getElementById('status-text').innerText = "System Online";
-            }, (error) => {
-                 console.error("Data Error:", error);
-                 if(error.code === 'permission-denied') {
-                     document.getElementById('status-text').innerText = "AUTH ERROR: RE-LOGIN";
-                     document.getElementById('status-indicator').className = "w-2 h-2 rounded-full bg-red-500 shadow-sm";
-                 }
-            });
+            }, (error) => { console.error("Data Error:", error); if(error.code === 'permission-denied') { document.getElementById('status-text').innerText = "AUTH ERROR"; document.getElementById('status-indicator').className = "w-2 h-2 rounded-full bg-red-500"; } });
         }
 
         function renderData() {
-            markersCluster.clearLayers();
-            reportMarkers.clear();
-            const listContainer = document.getElementById('report-list');
-            listContainer.innerHTML = '';
-
+            markersCluster.clearLayers(); reportMarkers.clear();
+            const listContainer = document.getElementById('report-list'); listContainer.innerHTML = '';
             const filteredReports = viewHistorical ? allReports : allReports.filter(r => r.status !== 'resolved');
-
+            if (filteredReports.length === 0) listContainer.innerHTML = '<div class="p-6 text-center text-gray-400"><div class="text-3xl mb-2">📋</div><p class="text-xs uppercase tracking-wider font-bold">No '+(viewHistorical ? '' : 'Active ')+'Reports</p></div>';
             filteredReports.forEach(d => {
                 if (d.gps && d.gps.includes(',')) {
                     const [lat, lng] = d.gps.split(',').map(Number);
-                    const isWater = d.systemType === 'Water Meter';
-                    const isResolved = d.status === 'resolved';
-                    
+                    const isWater = d.systemType === 'Water Meter', isResolved = d.status === 'resolved';
                     const color = isResolved ? '#94a3b8' : (isWater ? '#2563eb' : '#dc2626');
-                    const radius = isWater ? '50%' : '6px';
-                    const label = isWater ? 'W' : 'S';
-                    const shadowColor = isResolved ? 'rgba(0,0,0,0.1)' : (isWater ? 'rgba(37, 99, 235, 0.4)' : 'rgba(220, 38, 38, 0.4)');
-                    
-                    const iconHtml = `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: ${radius}; border: 2px solid white; box-shadow: 0 4px 10px ${shadowColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 11px;">${label}</div>`;
-                    const customIcon = L.divIcon({ className: `custom-div-icon ${isResolved ? '' : 'marker-pulse'}`, html: iconHtml, iconSize: [24, 24], iconAnchor: [12, 12] });
-                    const marker = L.marker([lat, lng], {icon: customIcon});
-                    
-                    const popupContent = `
-                        <div class="font-sans min-w-[200px]">
-                            <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
-                                <span class="text-[10px] font-bold text-gray-400 uppercase">Status</span>
-                                <span class="text-[10px] font-black uppercase ${isResolved ? 'text-gray-500' : 'text-green-600'}">
-                                    ${isResolved ? '✅ Resolved' : '⭕ Active'}
-                                </span>
-                            </div>
-                            <div class="text-sm font-semibold text-gray-800 leading-tight mb-1">${d.address}</div>
-                            <div class="text-[11px] text-gray-500 mb-2">${d.dateTime ? d.dateTime.replace('T', ' ') : ''}</div>
-                            <div class="flex items-center gap-2 mb-2">
-                                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Unit: ${d.unit || 'UNK'}</span>
-                            </div>
-                            ${d.lastTechnician ? `<div class="bg-blue-50 p-2 rounded text-[10px] text-blue-800 font-bold mb-2 uppercase">VERIFIED BY: ${d.lastTechnician}</div>` : ''}
-                            ${!isResolved ? `<button onclick="resolveReport('${d._id}')" class="w-full bg-navy text-white text-[10px] font-bold py-2 rounded uppercase tracking-widest mt-2">Update / Resolve</button>` : ''}
-                        </div>`;
-                    
+                    const radius = isWater ? '50%' : '6px', label = isWater ? 'W' : 'S';
+                    const iconHtml = '<div style="background:'+color+';width:24px;height:24px;border-radius:'+radius+';border:2px solid white;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:11px;">'+label+'</div>';
+                    const marker = L.marker([lat, lng], {icon: L.divIcon({ className: 'custom-div-icon '+(isResolved?'':'marker-pulse'), html: iconHtml, iconSize: [24, 24], iconAnchor: [12, 12] })});
+                    const popupContent = '<div class="font-sans min-w-[200px]"><div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase">Status</span><span class="text-[10px] font-black uppercase '+(isResolved?'text-gray-500':'text-green-600')+'">'+(isResolved?'✅ Resolved':'⭕ Active')+'</span></div><div class="text-sm font-semibold text-gray-800 leading-tight mb-1">'+d.address+'</div><div class="text-[11px] text-gray-500 mb-2">'+(d.dateTime?d.dateTime.replace('T',' '):'')+'</div><div class="flex items-center gap-2 mb-2 flex-wrap"><span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Unit: '+(d.unit||'UNK')+'</span>'+(d.fireWatch==='Yes'?'<span class="bg-red-100 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">🔥 Fire Watch</span>':'')+'</div>'+(d.lastTechnician?'<div class="bg-blue-50 p-2 rounded text-[10px] text-blue-800 font-bold mb-2 uppercase">VERIFIED BY: '+d.lastTechnician+'</div>':'')+(!isResolved?'<button onclick="resolveReport(\''+d._id+'\')" class="w-full bg-navy text-white text-[10px] font-bold py-2 rounded uppercase tracking-widest mt-2">Update / Resolve</button>':'')+'</div>';
                     marker.bindPopup(popupContent, { closeButton: false, className: 'shadow-xl' });
-                    markersCluster.addLayer(marker);
-                    reportMarkers.set(d._id, marker);
-
+                    markersCluster.addLayer(marker); reportMarkers.set(d._id, marker);
                     const listItem = document.createElement('div');
-                    listItem.className = `p-3 border-b border-white/10 hover:bg-white/5 cursor-pointer transition-colors ${isResolved ? 'opacity-50' : ''}`;
+                    listItem.className = 'p-3 border-b border-white/10 hover:bg-white/5 cursor-pointer transition-colors '+(isResolved?'opacity-50':'');
                     listItem.onclick = () => flyToReport(lat, lng, d._id);
-                    listItem.innerHTML = `
-                        <div class="flex items-start gap-3">
-                            <div class="mt-1 w-2 h-2 rounded-full ${isResolved ? 'bg-gray-500' : (isWater ? 'bg-blue-500' : 'bg-red-500')}"></div>
-                            <div class="flex-1">
-                                <h4 class="text-white text-sm font-semibold">${d.address}</h4>
-                                <div class="flex items-center gap-2 mt-1">
-                                    <span class="bg-blue-900/50 text-blue-200 border border-blue-500/30 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">
-                                        ${d.unit || 'UNK'}
-                                    </span>
-                                    <span class="text-[10px] text-gray-400 uppercase">${d.dateTime ? d.dateTime.split('T')[0] : ''}</span>
-                                </div>
-                            </div>
-                        </div>`;
+                    listItem.innerHTML = '<div class="flex items-start gap-3"><div class="mt-1 w-2 h-2 rounded-full '+(isResolved?'bg-gray-500':(isWater?'bg-blue-500':'bg-red-500'))+'"></div><div class="flex-1"><h4 class="text-white text-sm font-semibold">'+d.address+'</h4><div class="flex items-center gap-2 mt-1 flex-wrap"><span class="bg-blue-900/50 text-blue-200 border border-blue-500/30 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">'+(d.unit||'UNK')+'</span><span class="text-[10px] text-gray-400 uppercase">'+(d.dateTime?d.dateTime.split('T')[0]:'')+'</span>'+(d.fireWatch==='Yes'?'<span class="text-[9px] text-red-400 font-bold">🔥 FW</span>':'')+'</div></div></div>';
                     listContainer.appendChild(listItem);
                 }
             });
-
             document.getElementById('count').innerText = allReports.filter(r => r.status !== 'resolved').length;
+        }
+
+        function updateAnalytics() {
+            if (!allReports || allReports.length === 0) { document.getElementById('stat-active').innerText = '0'; document.getElementById('stat-resolved').innerText = '0'; document.getElementById('stat-damage').innerText = '0'; document.getElementById('stat-firewatch').innerText = '0'; return; }
+            document.getElementById('stat-active').innerText = allReports.filter(r => r.status !== 'resolved').length;
+            document.getElementById('stat-resolved').innerText = allReports.filter(r => r.status === 'resolved').length;
+            document.getElementById('stat-damage').innerText = allReports.filter(r => r.damage === 'Yes').length;
+            document.getElementById('stat-firewatch').innerText = allReports.filter(r => r.fireWatch === 'Yes').length;
+
+            const last7Days = []; const today = new Date();
+            for (let i = 6; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); last7Days.push(d.toISOString().split('T')[0]); }
+            const dailyCounts = last7Days.map(day => allReports.filter(r => r.dateTime && r.dateTime.startsWith(day)).length);
+            const dailyResolved = last7Days.map(day => allReports.filter(r => r.resolvedAt && r.resolvedAt.startsWith(day)).length);
+            const dayLabels = last7Days.map(d => { const date = new Date(d + 'T12:00:00'); return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); });
+
+            if (charts.timeline) charts.timeline.destroy();
+            const timelineCtx = document.getElementById('chart-timeline');
+            if (timelineCtx) { charts.timeline = new Chart(timelineCtx, { type: 'bar', data: { labels: dayLabels, datasets: [{ label: 'New Reports', data: dailyCounts, backgroundColor: 'rgba(21,42,64,0.8)', borderColor: '#152a40', borderWidth: 1, borderRadius: 4 }, { label: 'Resolved', data: dailyResolved, backgroundColor: 'rgba(34,197,94,0.7)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 20, font: { size: 11, weight: '600' } } } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { ticks: { font: { size: 10 } }, grid: { display: false } } } } }); }
+
+            const waterMeterCount = allReports.filter(r => r.systemType === 'Water Meter').length;
+            const sprinklerCount = allReports.filter(r => r.systemType === 'Sprinkler System').length;
+            if (charts.distribution) charts.distribution.destroy();
+            const distCtx = document.getElementById('chart-dist');
+            if (distCtx) { charts.distribution = new Chart(distCtx, { type: 'doughnut', data: { labels: ['Water Meters', 'Sprinkler Systems'], datasets: [{ data: [waterMeterCount, sprinklerCount], backgroundColor: ['#2563eb', '#dc2626'], borderWidth: 3, borderColor: '#ffffff' }] }, options: { responsive: true, maintainAspectRatio: true, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 11, weight: '600' } } } } } }); }
+
+            const unitCounts = {}; allReports.forEach(r => { if (r.unit) unitCounts[r.unit] = (unitCounts[r.unit] || 0) + 1; });
+            const sortedUnits = Object.entries(unitCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            if (charts.units) charts.units.destroy();
+            const unitsCtx = document.getElementById('chart-units');
+            if (unitsCtx && sortedUnits.length > 0) { charts.units = new Chart(unitsCtx, { type: 'bar', data: { labels: sortedUnits.map(u => u[0]), datasets: [{ label: 'Reports Filed', data: sortedUnits.map(u => u[1]), backgroundColor: 'rgba(249,192,49,0.8)', borderColor: '#f9c031', borderWidth: 1, borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, y: { ticks: { font: { size: 11, weight: '600' } }, grid: { display: false } } } } }); }
+
+            const hourCounts = new Array(24).fill(0); allReports.forEach(r => { if (r.dateTime) { const hour = parseInt(r.dateTime.split('T')[1]?.split(':')[0] || '0'); hourCounts[hour]++; } });
+            if (charts.hourly) charts.hourly.destroy();
+            const hourlyCtx = document.getElementById('chart-hourly');
+            if (hourlyCtx) { const hourLabels = []; for (let i = 0; i < 24; i++) { hourLabels.push((i % 12 || 12) + (i >= 12 ? 'PM' : 'AM')); }
+                charts.hourly = new Chart(hourlyCtx, { type: 'line', data: { labels: hourLabels, datasets: [{ label: 'Reports by Hour', data: hourCounts, fill: true, backgroundColor: 'rgba(21,42,64,0.1)', borderColor: '#152a40', borderWidth: 2, tension: 0.4, pointBackgroundColor: '#152a40', pointRadius: 3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45 }, grid: { display: false } } } } }); }
         }
 
         window.openCSVModal = () => document.getElementById('csv-modal').classList.remove('hidden');
         window.closeCSVModal = () => document.getElementById('csv-modal').classList.add('hidden');
-
         window.processCSVDownload = function() {
+            let filtered = [...allReports];
             const statusFilter = document.getElementById('csv-filter-status').value;
             const typeFilter = document.getElementById('csv-filter-type').value;
             const timeFilter = document.getElementById('csv-filter-time').value;
-
-            let filtered = [...allReports];
             if (statusFilter !== 'all') filtered = filtered.filter(r => (statusFilter === 'active' ? r.status !== 'resolved' : r.status === 'resolved'));
             if (typeFilter !== 'all') filtered = filtered.filter(r => r.systemType === typeFilter);
-
-            if (timeFilter !== 'all') {
-                const now = new Date();
-                const limit = new Date(now.setDate(now.getDate() - parseInt(timeFilter)));
-                filtered = filtered.filter(r => r.dateTime && new Date(r.dateTime) >= limit);
-            }
-
+            if (timeFilter !== 'all') { const now = new Date(); const limit = new Date(now.setDate(now.getDate() - parseInt(timeFilter))); filtered = filtered.filter(r => r.dateTime && new Date(r.dateTime) >= limit); }
             if (filtered.length === 0) return alert("No reports match your filters.");
-
-            const headers = ["Status", "Type", "Address", "Date", "Verified_By", "Notes", "Lat", "Lon"];
-            const rows = [headers];
-            filtered.forEach(r => {
-                let [lat, lng] = (r.gps || ',').split(',');
-                rows.push([r.status || 'active', r.systemType, r.address, r.dateTime, r.lastTechnician || 'N/A', r.resolutionNotes || '', lat, lng]);
-            });
-
-            const csvContent = rows.map(e => e.join(",")).join("\n");
-            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `DFD_Report_Export.csv`;
-            link.click();
-            closeCSVModal();
+            const headers = ["Status","Type","Address","Date","Unit","Fire_Watch","Damage","Verified_By","Notes","Lat","Lon"];
+            const rows = [headers]; filtered.forEach(r => { let [lat, lng] = (r.gps || ',').split(','); rows.push([r.status || 'active', r.systemType, '"'+(r.address||'').replace(/"/g,'""')+'"', r.dateTime, r.unit, r.fireWatch||'No', r.damage||'No', r.lastTechnician||'N/A', '"'+(r.resolutionNotes||'').replace(/"/g,'""')+'"', lat, lng]); });
+            const blob = new Blob(["\uFEFF" + rows.map(e => e.join(",")).join("\n")], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = 'DFD_Report_Export_'+new Date().toISOString().split('T')[0]+'.csv'; link.click(); closeCSVModal();
         }
 
         window.setUpdateMode = function(mode) {
             updateMode = mode;
-            const statusBtn = document.getElementById('btn-mode-update');
-            const resolveBtn = document.getElementById('btn-mode-resolve');
-            const notesSection = document.getElementById('notes-section');
-            const submitBtnText = document.getElementById('submit-btn-text');
-
-            if (mode === 'update') {
-                statusBtn.classList.add('bg-navy', 'text-white', 'border-navy');
-                statusBtn.classList.remove('border-slate-100', 'text-navy');
-                resolveBtn.classList.remove('bg-green-500', 'text-white', 'border-green-500');
-                resolveBtn.classList.add('border-green-100', 'text-green-700');
-                notesSection.classList.remove('hidden');
-                submitBtnText.innerText = "POST UPDATE";
-            } else {
-                resolveBtn.classList.add('bg-green-500', 'text-white', 'border-green-500');
-                resolveBtn.classList.remove('border-green-100', 'text-green-700');
-                statusBtn.classList.remove('bg-navy', 'text-white', 'border-navy');
-                statusBtn.classList.add('border-slate-100', 'text-navy');
-                notesSection.classList.add('hidden');
-                submitBtnText.innerText = "MARK AS RESTORED";
-            }
+            const statusBtn = document.getElementById('btn-mode-update'), resolveBtn = document.getElementById('btn-mode-resolve'), notesSection = document.getElementById('notes-section'), submitBtnText = document.getElementById('submit-btn-text');
+            if (mode === 'update') { statusBtn.classList.add('bg-navy', 'text-white', 'border-navy'); resolveBtn.classList.remove('bg-green-500', 'text-white', 'border-green-500'); notesSection.classList.remove('hidden'); submitBtnText.innerText = "POST UPDATE"; }
+            else { resolveBtn.classList.add('bg-green-500', 'text-white', 'border-green-500'); statusBtn.classList.remove('bg-navy', 'text-white', 'border-navy'); notesSection.classList.add('hidden'); submitBtnText.innerText = "MARK AS RESTORED"; }
         }
-
-        window.resolveReport = function(id) {
-            currentReportId = id;
-            const r = allReports.find(x => x._id === id);
-            document.getElementById('modal-address').innerText = r.address;
-            document.getElementById('resolve-modal').classList.remove('hidden');
-            setUpdateMode('resolved'); 
-        }
-
+        window.resolveReport = function(id) { currentReportId = id; const r = allReports.find(x => x._id === id); document.getElementById('modal-address').innerText = r.address; document.getElementById('resolve-modal').classList.remove('hidden'); setUpdateMode('resolved'); }
         window.closeModal = () => document.getElementById('resolve-modal').classList.add('hidden');
-
         window.submitUpdate = async function() {
-            const tech = document.getElementById('tech-name').value.trim();
-            const notes = document.getElementById('res-notes').value.trim();
+            const tech = document.getElementById('tech-name').value.trim(); const notes = document.getElementById('res-notes').value.trim();
             if (!tech) return alert("Please enter Last Name.");
-
             const ref = doc(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs', currentReportId);
-            const payload = { 
-                lastTechnician: tech, 
-                resolutionNotes: notes, 
-                updatedAt: new Date().toISOString() 
-            };
-            if (updateMode === 'resolved') { 
-                payload.status = 'resolved'; 
-                payload.resolvedAt = new Date().toISOString(); 
-            }
-            
+            const payload = { lastTechnician: tech, resolutionNotes: notes, updatedAt: new Date().toISOString() };
+            if (updateMode === 'resolved') { payload.status = 'resolved'; payload.resolvedAt = new Date().toISOString(); }
             await updateDoc(ref, payload);
-            
-            // --- EMAIL NOTIFICATION (CLIENT-SIDE) ---
-            if (updateMode === 'resolved') {
-                 const addr = document.getElementById('modal-address').innerText;
-                 const subject = `Shutoff Resolved: ${addr}`;
-                 const body = `The water shutoff at ${addr} has been resolved by ${tech}.\n\nNotes: ${notes}\n\nTime: ${new Date().toLocaleString()}`;
-                 // Open default mail client
-                 window.location.href = `mailto:firemarshal@cityofdenton.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            }
-
+            if (updateMode === 'resolved') { const addr = document.getElementById('modal-address').innerText; window.location.href = 'mailto:firemarshal@cityofdenton.com?subject='+encodeURIComponent('Shutoff Resolved: '+addr)+'&body='+encodeURIComponent('The water shutoff at '+addr+' has been resolved by '+tech+'.\n\nNotes: '+notes+'\n\nTime: '+new Date().toLocaleString()); }
             closeModal();
         }
-
-        window.flyToReport = (lat, lng, id) => {
-            if(window.innerWidth < 768) toggleSidebar();
-            map.flyTo([lat, lng], 18);
-            const m = reportMarkers.get(id);
-            if(m) markersCluster.zoomToShowLayer(m, () => m.openPopup());
-        }
-
-        // --- ENHANCED PURGE LOGIC ---
-        window.nukeDatabasePrompt = function() {
-            const modal = document.getElementById('purge-modal');
-            if (modal) {
-                modal.classList.remove('hidden');
-                document.getElementById('purge-pass').value = '';
-                document.getElementById('purge-error').classList.add('hidden');
-            }
-        }
-
+        window.flyToReport = (lat, lng, id) => { if(window.innerWidth < 768) toggleSidebar(); map.flyTo([lat, lng], 18); const m = reportMarkers.get(id); if(m) markersCluster.zoomToShowLayer(m, () => m.openPopup()); }
+        window.nukeDatabasePrompt = function() { document.getElementById('purge-modal').classList.remove('hidden'); document.getElementById('purge-pass').value = ''; document.getElementById('purge-error').classList.add('hidden'); }
         window.closePurgeModal = () => document.getElementById('purge-modal').classList.add('hidden');
-
         window.submitPurge = async function() {
-            const pwInput = document.getElementById('purge-pass');
-            const errorMsg = document.getElementById('purge-error');
-            
-            if (pwInput.value !== "DentonFire1") {
-                errorMsg.classList.remove('hidden');
-                pwInput.value = '';
-                return;
-            }
-
-            if (confirm("FINAL WARNING: This will permanently delete ALL historical and active records. Continue?")) {
-                try {
-                    const q = collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs');
-                    const snap = await getDocs(q);
-                    
-                    if (snap.empty) {
-                        alert("Database is already empty.");
-                        closePurgeModal();
-                        return;
-                    }
-
-                    // Handle batches in chunks of 500 (Firebase Limit)
-                    let docs = [...snap.docs];
-                    while (docs.length > 0) {
-                        const batch = writeBatch(db);
-                        const chunk = docs.splice(0, 500);
-                        chunk.forEach(d => batch.delete(d.ref));
-                        await batch.commit();
-                    }
-                    
-                    alert("Database successfully purged.");
-                    closePurgeModal();
-                } catch (error) {
-                    alert("Purge failed: " + error.message);
-                }
+            const pwInput = document.getElementById('purge-pass'); const errorMsg = document.getElementById('purge-error');
+            if (pwInput.value !== "DentonFire1") { errorMsg.classList.remove('hidden'); pwInput.value = ''; return; }
+            if (confirm("FINAL WARNING: Delete ALL records permanently?")) {
+                try { const q = collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'); const snap = await getDocs(q); if (snap.empty) { alert("Database is empty."); closePurgeModal(); return; }
+                    let docs = [...snap.docs]; while (docs.length > 0) { const batch = writeBatch(db); const chunk = docs.splice(0, 500); chunk.forEach(d => batch.delete(d.ref)); await batch.commit(); }
+                    alert("Database purged."); closePurgeModal();
+                } catch (error) { alert("Purge failed: " + error.message); }
             }
         }
     </script>
-</head>
-<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden relative">
-
-    <!-- SUCCESS ACCOUNT CREATED MODAL (REPLACES ALERT) -->
-    <div id="success-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-navy/95 backdrop-blur-md"></div>
-        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-8 text-center animate-in zoom-in duration-300">
-            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-            </div>
-            <h3 class="text-xl font-black text-navy mb-2">Verification Email Sent</h3>
-            <p class="text-sm text-gray-500 mb-6 leading-relaxed">
-                We sent a link to <span id="success-email-target" class="font-bold text-navy"></span>.
-            </p>
-            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-left mb-6 text-blue-800">
-                <p class="font-bold mb-1">📢 Important:</p>
-                City email scanners often click links automatically to check for viruses. If you click the link and see <strong>"Link Expired"</strong>, it means the scanner already verified you! Just come back here and log in.
-            </div>
-            <button onclick="window.closeSuccessModal()" class="block w-full bg-navy text-white font-bold py-3 rounded-lg hover:bg-navy-light text-xs uppercase tracking-widest shadow-lg">Return to Login</button>
-        </div>
-    </div>
-
-    <!-- VERIFICATION POLLING MODAL -->
-    <div id="verification-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-navy/95 backdrop-blur-md"></div>
-        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-8 text-center animate-in zoom-in duration-300">
-            <div class="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg class="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </div>
-            <h3 class="text-xl font-black text-navy mb-2">Pending Verification</h3>
-            <p class="text-sm text-gray-500 mb-6 leading-relaxed">
-                Waiting for verification of <br> <span id="verify-email-target" class="font-bold text-navy">...</span>
-            </p>
-            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-left mb-6 text-blue-800">
-                <p class="font-bold mb-1">💡 Pro Tip:</p>
-                <strong>We are auto-checking your status.</strong> If the city scanner clicks your email link, you will be logged in automatically right here!
-            </div>
-            
-            <div class="space-y-3">
-                <button onclick="window.resendVerificationEmail()" class="text-xs text-navy font-bold hover:underline">Resend Email</button>
-                <button onclick="window.cancelVerification()" class="block w-full border border-gray-300 text-gray-500 font-bold py-3 rounded-lg hover:bg-gray-50 text-xs uppercase tracking-widest">Back to Login</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- CUSTOM PURGE AUTHORIZATION MODAL -->
-    <div id="purge-modal" class="fixed inset-0 z-[10002] hidden flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-red-950/90 backdrop-blur-md" onclick="closePurgeModal()"></div>
-        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border-4 border-red-600 animate-in zoom-in duration-300">
-            <div class="bg-red-600 p-6 text-white text-center">
-                <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                <h3 class="text-xl font-black uppercase tracking-tighter">Authorize Purge</h3>
-                <p class="text-red-100 text-[10px] font-bold mt-1 uppercase tracking-widest">Administrative Override Required</p>
-            </div>
-            <div class="p-6 space-y-4">
-                <p class="text-[11px] text-gray-500 text-center font-medium leading-relaxed">
-                    You are attempting to delete all incident records. This action is <span class="text-red-600 font-black">PERMANENT</span> and cannot be undone.
-                </p>
-                <div>
-                    <label class="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1 text-center">Secondary Admin Password</label>
-                    <input type="password" id="purge-pass" class="w-full bg-slate-50 border-2 border-slate-200 p-3 rounded-xl text-center text-lg font-black tracking-[0.3em] focus:border-red-600 focus:outline-none transition-all">
-                    <p id="purge-error" class="text-red-600 text-[10px] font-black mt-2 text-center hidden">Access Denied: Invalid Password</p>
-                </div>
-                <div class="grid grid-cols-2 gap-3 mt-4">
-                    <button onclick="closePurgeModal()" class="py-3 rounded-xl bg-slate-100 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
-                    <button onclick="submitPurge()" class="py-3 rounded-xl bg-red-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg">Confirm Purge</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALS -->
-    <div id="csv-modal" class="fixed inset-0 z-[10001] hidden flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-navy/80 backdrop-blur-sm" onclick="closeCSVModal()"></div>
-        <div class="relative bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
-            <h3 class="text-lg font-black uppercase text-navy mb-4">Export Filtered Data</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Status</label>
-                    <select id="csv-filter-status" class="w-full bg-slate-50 border p-2 rounded-lg text-sm">
-                        <option value="all">All Statuses</option>
-                        <option value="active">Active Only</option>
-                        <option value="resolved">Resolved Only</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">System Type</label>
-                    <select id="csv-filter-type" class="w-full bg-slate-50 border p-2 rounded-lg text-sm">
-                        <option value="all">All Types</option>
-                        <option value="Water Meter">Water Meters Only</option>
-                        <option value="Sprinkler System">Sprinklers Only</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Timeframe</label>
-                    <select id="csv-filter-time" class="w-full bg-slate-50 border p-2 rounded-lg text-sm">
-                        <option value="all">All Time</option>
-                        <option value="7">Last 7 Days</option>
-                        <option value="30">Last 30 Days</option>
-                    </select>
-                </div>
-                <button onclick="processCSVDownload()" class="w-full bg-navy text-white font-black py-3 rounded-xl uppercase tracking-widest text-xs mt-4">Generate CSV</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- UPDATE MODAL -->
-    <div id="resolve-modal" class="fixed inset-0 z-[10000] hidden flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-navy/80 backdrop-blur-sm" onclick="closeModal()"></div>
-        <div class="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div class="bg-navy p-6 text-white flex justify-between">
-                <div><h3 class="text-xl font-black uppercase tracking-tight">Update Report</h3><p id="modal-address" class="text-blue-200 text-xs mt-1">Address...</p></div>
-                <button onclick="closeModal()" class="text-white/50 hover:text-white transition-colors">✕</button>
-            </div>
-            
-            <div class="p-6 space-y-6">
-                <div class="grid grid-cols-2 gap-3">
-                    <button id="btn-mode-update" onclick="setUpdateMode('update')" class="p-4 rounded-xl border-2 transition-all text-center flex flex-col items-center">
-                        <span class="font-black text-xs uppercase block">Status Update</span>
-                        <span class="text-[9px] uppercase font-bold opacity-60">Add Note Only</span>
-                    </button>
-                    <button id="btn-mode-resolve" onclick="setUpdateMode('resolved')" class="p-4 rounded-xl border-2 transition-all text-center flex flex-col items-center">
-                        <span class="font-black text-xs uppercase block">Service Restored</span>
-                        <span class="text-[9px] uppercase font-bold opacity-60">Resolve Shutoff</span>
-                    </button>
-                </div>
-
-                <div class="space-y-4">
-                    <div>
-                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Verified By</label>
-                        <input type="text" id="tech-name" placeholder="Last Name" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:outline-none transition-all">
-                    </div>
-                    
-                    <div id="notes-section" class="hidden animate-in slide-in-from-top-2 duration-200">
-                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Update Notes</label>
-                        <textarea id="res-notes" rows="3" placeholder="Enter status update details..." class="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm focus:ring-2 focus:ring-navy focus:outline-none transition-all"></textarea>
-                    </div>
-                </div>
-
-                <button onclick="submitUpdate()" class="w-full bg-navy text-white font-black py-4 rounded-xl uppercase tracking-widest text-xs shadow-lg hover:bg-navy-light active:scale-[0.98] transition-all">
-                    <span id="submit-btn-text">SUBMIT</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- LOGIN SCREEN (UPDATED for Email/Password) -->
-    <div id="login-overlay" class="fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-500 px-4">
-        <div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div>
-            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" alt="Denton Fire" class="h-16 w-auto mx-auto mb-4 drop-shadow-lg object-contain">
-            <h2 id="auth-mode-title" class="text-2xl font-black text-white mb-1 uppercase tracking-tight">Admin Portal</h2>
-            <p class="text-blue-200 text-xs mb-6 font-medium tracking-wide uppercase">Water Shutoff Command</p>
-            
-            <div class="space-y-3">
-                <input type="email" id="email" placeholder="USER EMAIL" 
-                    class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-wider focus:outline-none focus:ring-2 focus:ring-yellow transition-all shadow-inner text-sm">
-                
-                <input type="password" id="password" onkeyup="handleEnter(event)" placeholder="PASSWORD" 
-                    class="w-full bg-navy-light/50 border border-white/10 rounded-lg p-3 text-white placeholder-blue-300/50 text-center tracking-wider focus:outline-none focus:ring-2 focus:ring-yellow transition-all shadow-inner text-sm">
-                
-                <p id="login-error" class="text-red-400 font-bold text-xs hidden bg-red-900/30 py-1 rounded border border-red-500/30">Invalid Access</p>
-                
-                <button id="login-btn" onclick="handleAuth()" 
-                    class="w-full bg-white text-navy font-black py-3 rounded-lg hover:bg-gray-100 active:scale-95 transition-all shadow-lg uppercase tracking-wider text-xs">
-                    Authenticate
-                </button>
-
-                <p id="auth-toggle-text" onclick="toggleAuthMode()" class="text-gray-400 text-[10px] mt-4 cursor-pointer hover:text-white transition-colors uppercase tracking-widest">
-                    Need access? <span class="underline">Create Account</span>
-                </p>
-            </div>
-            
-            <div id="security-badge" class="mt-6 flex items-center justify-center gap-2 opacity-60">
-                <div id="secure-light" class="w-2 h-2 rounded-full transition-colors duration-500"></div>
-                <p id="secure-text" class="text-[10px] font-mono tracking-widest uppercase transition-colors duration-500">CHECKING SECURITY...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- DASHBOARD VIEW (Hidden by default to fix flash) -->
-    <div id="dashboard-view" class="hidden absolute inset-0 flex flex-col" style="display: none;">
-        <header class="h-20 bg-white border-b border-gray-200 px-6 flex items-center justify-between z-[70]">
-            <div class="flex items-center gap-4">
-                <button onclick="toggleSidebar()" class="bg-navy text-white p-2.5 rounded-lg lg:hidden shadow-md">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                </button>
-                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-10">
-                <div class="hidden sm:block">
-                    <h1 class="text-navy font-black uppercase text-base leading-none">Command Center</h1>
-                    <div class="flex items-center gap-2 mt-1">
-                        <span id="status-indicator" class="w-2 h-2 rounded-full bg-yellow-400"></span>
-                        <p id="status-text" class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Connecting...</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="hidden md:flex gap-8 items-center border-l border-r border-gray-100 px-8">
-                <div class="text-center">
-                    <span id="count" class="block text-2xl font-black text-navy leading-none transition-all duration-300">--</span>
-                    <span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Active Reports</span>
-                </div>
-                <div class="flex gap-4">
-                    <div class="flex flex-col items-center">
-                        <div class="w-3 h-3 rounded-full bg-blue-600 mb-1 border border-white shadow-sm"></div>
-                        <span class="text-[8px] font-bold text-gray-400 uppercase">Meter</span>
-                    </div>
-                    <div class="flex flex-col items-center">
-                        <div class="w-3 h-3 rounded-sm bg-red-600 mb-1 border border-white shadow-sm"></div>
-                        <span class="text-[8px] font-bold text-gray-400 uppercase">System</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex items-center gap-3">
-                <nav class="bg-slate-100 p-1 rounded-xl flex mr-2 hidden lg:flex">
-                    <button id="nav-map" onclick="switchView('map')" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase bg-navy text-white transition-all shadow-sm">Map</button>
-                    <button id="nav-analytics" onclick="switchView('analytics')" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase text-navy hover:bg-white transition-all">Analytics</button>
-                </nav>
-
-                <a href="water_shutoff.html" class="bg-navy hover:bg-navy-light text-white text-[10px] font-black py-2.5 px-5 rounded-lg transition-all shadow hover:shadow-lg active:scale-95 flex items-center gap-2 uppercase tracking-widest">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                    New Report
-                </a>
-
-                <button onclick="performLogout()" class="text-gray-400 hover:text-red-600 p-2 transition-colors">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                </button>
-            </div>
-        </header>
-
-        <main class="flex-1 relative flex">
-            <aside id="list-sidebar" class="absolute inset-y-0 left-0 w-80 glass-dark z-[60] transform -translate-x-full lg:translate-x-0 transition-transform duration-300 flex flex-col border-r border-white/10 shadow-2xl">
-                <div class="p-4 border-b border-white/10 bg-navy/20 flex items-center justify-between">
-                    <span class="text-white font-black uppercase tracking-wider text-xs">Incident Log</span>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[9px] text-gray-400 uppercase font-bold">Historical</span>
-                        <label class="switch"><input type="checkbox" id="historical-toggle" onchange="toggleHistorical()"><span class="slider"></span></label>
-                    </div>
-                </div>
-                <div id="report-list" class="flex-1 overflow-y-auto"></div>
-            </aside>
-
-            <div class="flex-1 relative overflow-hidden">
-                <div id="map-container" class="absolute inset-0">
-                    <div id="map" class="w-full h-full bg-slate-200"></div>
-                    <div class="absolute bottom-6 left-0 w-full z-50 flex justify-center pointer-events-none px-4">
-                        <div class="pointer-events-auto bg-white rounded-full p-2 shadow-floating flex items-center gap-1 border border-gray-200 scale-90 sm:scale-100">
-                            <button onclick="openCSVModal()" class="flex items-center gap-2 px-6 py-2.5 rounded-full hover:bg-blue-50 text-navy font-black text-[10px] uppercase tracking-widest transition-all">
-                                <span class="bg-blue-600 text-white p-1 rounded-full"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></span>
-                                Download CSV
-                            </button>
-                            <div class="w-px h-6 bg-gray-200"></div>
-                            <button onclick="nukeDatabasePrompt()" class="flex items-center gap-2 px-6 py-2.5 rounded-full hover:bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-widest transition-all">
-                                <span class="bg-red-600 text-white p-1 rounded-full"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></span>
-                                Purge All
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="analytics-container" class="absolute inset-0 bg-slate-50 overflow-y-auto p-8 hidden">
-                    <div class="max-w-6xl mx-auto space-y-8">
-                        <div class="flex justify-between items-end">
-                            <div>
-                                <h2 class="text-3xl font-black text-navy uppercase">Department BI Dashboard</h2>
-                                <p class="text-gray-400 font-bold uppercase tracking-widest text-xs mt-1">Incident Intelligence & Analytics</p>
-                            </div>
-                            <div class="text-[10px] font-black bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100 uppercase text-gray-400">Live Sync Enabled</div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <span class="text-blue-600 font-black text-[10px] uppercase tracking-widest">Active incidents</span>
-                                <h3 id="stat-active" class="text-4xl font-black text-navy mt-1">--</h3>
-                                <p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Requiring Verification</p>
-                            </div>
-                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <span class="text-green-600 font-black text-[10px] uppercase tracking-widest">Resolved incidents</span>
-                                <h3 id="stat-resolved" class="text-4xl font-black text-navy mt-1">--</h3>
-                                <p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Services Restored</p>
-                            </div>
-                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <span class="text-red-600 font-black text-[10px] uppercase tracking-widest">Damage Assessment</span>
-                                <h3 id="stat-damage" class="text-4xl font-black text-navy mt-1">--</h3>
-                                <p class="text-[10px] text-gray-400 mt-2 uppercase font-bold tracking-wider">Reports with Damage</p>
-                            </div>
-                            <div class="bg-navy p-6 rounded-2xl shadow-xl text-white">
-                                <span class="text-blue-300 font-black text-[10px] uppercase tracking-widest">Network Status</span>
-                                <h3 class="text-3xl font-black mt-1 uppercase tracking-tighter">Verified</h3>
-                                <div class="w-full bg-white/10 h-1 rounded-full mt-4"><div class="bg-yellow w-full h-full shadow-[0_0_8px_#f9c031]"></div></div>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-12">
-                            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                                <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">Activity Timeline (Last 7 Days)</h4>
-                                <canvas id="chart-timeline" class="max-h-[300px]"></canvas>
-                            </div>
-                            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center">
-                                <h4 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6 w-full">System Type Breakdown</h4>
-                                <div class="max-w-[280px] w-full"><canvas id="chart-dist"></canvas></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
 </body>
 </html>
-
-### File 2: `water_shutoff.html` (Survey Form)
-**Changes:**
-* **Added `actionCodeSettings`:** Ensures consistency between both apps.
