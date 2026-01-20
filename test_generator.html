@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Data Generator | Water Shutoff System</title>
+    <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: { navy: '#152a40', red: '#bf2726', yellow: '#f9c031' } } }
+        }
+    </script>
+    <style>
+        .log-entry { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+            <div class="bg-navy p-6 text-white">
+                <div class="flex items-center gap-4">
+                    <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-12">
+                    <div>
+                        <h1 class="text-2xl font-black uppercase tracking-tight">Test Data Generator</h1>
+                        <p class="text-blue-200 text-xs uppercase tracking-widest">Water Shutoff System Pre-Deployment Validation</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 space-y-6">
+                <div class="bg-yellow/20 border-2 border-yellow rounded-lg p-4">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">⚠️</span>
+                        <div>
+                            <h3 class="font-black text-navy uppercase text-sm">Test Mode Active</h3>
+                            <p class="text-sm text-gray-600 mt-1">This tool generates <strong>6 randomized test reports</strong>. All emails CC'd to <strong>hunter.lott@cityofdenton.com</strong>. Use "Purge All" on dashboard to clear test data after validation.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="auth-status" class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div class="flex items-center gap-3">
+                        <div id="auth-indicator" class="w-3 h-3 rounded-full bg-yellow-400 animate-pulse"></div>
+                        <span id="auth-text" class="text-sm font-bold text-gray-500">Checking authentication...</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button id="generate-btn" onclick="generateTestData()" disabled
+                        class="bg-navy text-white font-black py-4 px-6 rounded-xl uppercase tracking-widest text-sm hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        Generate 6 Test Reports
+                    </button>
+                    <a href="index.html" class="bg-gray-100 text-navy font-black py-4 px-6 rounded-xl uppercase tracking-widest text-sm hover:bg-gray-200 transition flex items-center justify-center gap-2 border border-gray-200">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                        Open Dashboard
+                    </a>
+                </div>
+
+                <div id="progress-section" class="hidden">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-black text-gray-400 uppercase tracking-widest">Progress</span>
+                        <span id="progress-text" class="text-xs font-bold text-navy">0 / 6</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                        <div id="progress-bar" class="bg-navy h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-900 rounded-xl p-4 min-h-[300px] max-h-[400px] overflow-y-auto">
+                    <div class="flex items-center gap-2 mb-4 pb-2 border-b border-gray-700">
+                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span class="text-gray-500 text-xs font-mono ml-2">test_generator.log</span>
+                    </div>
+                    <div id="log-output" class="font-mono text-xs space-y-1">
+                        <div class="text-gray-500">[System] Test Data Generator initialized</div>
+                        <div class="text-gray-500">[System] Awaiting authentication...</div>
+                    </div>
+                </div>
+
+                <div id="results-section" class="hidden bg-green-50 border border-green-200 rounded-lg p-4">
+                    <h3 class="font-black text-green-800 uppercase text-sm flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Test Data Generated Successfully
+                    </h3>
+                    <p class="text-sm text-green-700 mt-2">6 test reports added. Check the dashboard to verify they appear correctly.</p>
+                    <div id="email-links" class="mt-4 space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA",
+            authDomain: "denton-fire-tools.firebaseapp.com",
+            projectId: "denton-fire-tools",
+            storageBucket: "denton-fire-tools.firebasestorage.app",
+            messagingSenderId: "751121603550",
+            appId: "1:751121603550:web:3a8f25b990d45038ae1b4f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'denton-fire-tools';
+
+        let currentUser = null;
+
+        const testAddresses = [
+            "1501 W University Dr, Denton, TX 76201",
+            "415 E Hickory St, Denton, TX 76201",
+            "2200 Colorado Blvd, Denton, TX 76205",
+            "3000 N Interstate 35, Denton, TX 76207",
+            "1701 W McKinney St, Denton, TX 76201",
+            "500 N Bell Ave, Denton, TX 76209"
+        ];
+
+        const testGPSCoords = [
+            "33.2148,-97.1331", "33.2150,-97.1292", "33.2280,-97.1520",
+            "33.2450,-97.1331", "33.2180,-97.1480", "33.2320,-97.1100"
+        ];
+
+        const testUnits = ["E1", "E2", "E3", "T1", "E6", "BAT1"];
+        const systemTypes = ["Water Meter", "Sprinkler System"];
+        const locationOptions = ["N/A", "Alpha", "Bravo", "Charlie", "Delta"];
+        const damageDescriptions = [
+            "Valve handle broken during emergency shutoff",
+            "Pipe cracked from freeze damage",
+            "Cover missing, exposed valve",
+            "Corrosion damage to mechanism",
+            "Impact damage from vehicle"
+        ];
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log-output');
+            const timestamp = new Date().toLocaleTimeString();
+            let colorClass = 'text-gray-300', prefix = '[Info]';
+            if (type === 'success') { colorClass = 'text-green-400'; prefix = '[✓]'; }
+            if (type === 'error') { colorClass = 'text-red-400'; prefix = '[✗]'; }
+            if (type === 'warning') { colorClass = 'text-yellow-400'; prefix = '[!]'; }
+            if (type === 'system') { colorClass = 'text-blue-400'; prefix = '[System]'; }
+            
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${colorClass}`;
+            entry.innerHTML = `<span class="text-gray-500">${timestamp}</span> ${prefix} ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function getRandomItem(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+        function getRandomDate() {
+            const now = new Date();
+            now.setDate(now.getDate() - Math.floor(Math.random() * 7));
+            now.setHours(now.getHours() - Math.floor(Math.random() * 24));
+            return now.toISOString().slice(0, 16);
+        }
+
+        function generateTestReport(index) {
+            const systemType = systemTypes[index % 2];
+            const hasDamage = index < 2 ? "Yes" : "No";
+            const hasFireWatch = index < 3 ? "Yes" : "No";
+            const isWaterMeter = systemType === "Water Meter";
+            
+            return {
+                unit: testUnits[index],
+                address: testAddresses[index],
+                dateTime: getRandomDate(),
+                systemType: systemType,
+                gps: testGPSCoords[index],
+                damage: hasDamage,
+                notes: hasDamage === "Yes" ? getRandomItem(damageDescriptions) : "",
+                fireWatch: hasFireWatch,
+                locStreet: isWaterMeter ? getRandomItem(locationOptions) : "N/A",
+                loc20: isWaterMeter ? getRandomItem(locationOptions) : "N/A",
+                locBeyond: isWaterMeter ? getRandomItem(locationOptions) : "N/A",
+                timestamp: serverTimestamp(),
+                userId: currentUser ? currentUser.uid : 'test-generator',
+                submittedAt: new Date().toISOString(),
+                testData: true
+            };
+        }
+
+        function generateEmailLink(report, index) {
+            const CC_EMAIL = "hunter.lott@cityofdenton.com";
+            let recipient = report.systemType === "Water Meter" ? "watermetering@cityofdenton.com" : "FirePrevention@cityofdenton.com";
+            let subject = `[TEST ${index + 1}] ${report.systemType} Shutoff - Unit ${report.unit}`;
+            let mapLink = `https://www.google.com/maps/search/?api=1&query=${report.gps}`;
+
+            const body = `*** TEST REPORT - FOR VALIDATION ONLY ***
+
+SHUTOFF REPORT
+--------------------------------
+UNIT: ${report.unit}
+TYPE: ${report.systemType}
+ADDRESS: ${report.address}
+DATE/TIME: ${report.dateTime.replace('T', ' ')}
+FIRE WATCH ISSUED: ${report.fireWatch}
+
+MAP LINK: ${mapLink}
+
+DAMAGE: ${report.damage}
+${report.damage === 'Yes' ? `Description: ${report.notes}` : ''}
+
+*** TEST report for system validation ***`;
+
+            return {
+                url: `mailto:${recipient}?cc=${CC_EMAIL}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+                recipient: recipient,
+                type: report.systemType
+            };
+        }
+
+        window.generateTestData = async function() {
+            const btn = document.getElementById('generate-btn');
+            const progressSection = document.getElementById('progress-section');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const resultsSection = document.getElementById('results-section');
+            const emailLinksDiv = document.getElementById('email-links');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...';
+            
+            progressSection.classList.remove('hidden');
+            log('Starting test data generation...', 'system');
+            
+            const emailLinks = [];
+            let successCount = 0;
+            
+            for (let i = 0; i < 6; i++) {
+                try {
+                    const report = generateTestReport(i);
+                    log(`Creating report ${i + 1}/6: ${report.systemType} at ${report.address.split(',')[0]}...`);
+                    
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'), report);
+                    
+                    emailLinks.push(generateEmailLink(report, i));
+                    successCount++;
+                    
+                    progressBar.style.width = `${((i + 1) / 6) * 100}%`;
+                    progressText.innerText = `${i + 1} / 6`;
+                    
+                    log(`Report ${i + 1} created (${report.unit} - ${report.systemType})`, 'success');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                } catch (error) {
+                    log(`Error creating report ${i + 1}: ${error.message}`, 'error');
+                }
+            }
+            
+            if (successCount === 6) {
+                log('All 6 test reports generated!', 'success');
+                log('Email links ready - CC to hunter.lott@cityofdenton.com', 'system');
+                
+                resultsSection.classList.remove('hidden');
+                emailLinksDiv.innerHTML = emailLinks.map((link, idx) => `
+                    <a href="${link.url}" class="block bg-white border border-green-200 rounded-lg p-3 hover:bg-green-100 transition">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="text-lg">${link.type === 'Water Meter' ? '💧' : '🧯'}</span>
+                                <div>
+                                    <div class="font-bold text-sm text-navy">Test Email ${idx + 1}</div>
+                                    <div class="text-xs text-gray-500">${link.type} → ${link.recipient}</div>
+                                </div>
+                            </div>
+                            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        </div>
+                    </a>
+                `).join('');
+            }
+            
+            btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Generate Again';
+            btn.disabled = false;
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            const indicator = document.getElementById('auth-indicator');
+            const text = document.getElementById('auth-text');
+            const btn = document.getElementById('generate-btn');
+            
+            if (user && user.email.endsWith('@cityofdenton.com') && user.emailVerified) {
+                currentUser = user;
+                indicator.className = 'w-3 h-3 rounded-full bg-green-500';
+                text.innerText = `Authenticated as ${user.email}`;
+                text.className = 'text-sm font-bold text-green-600';
+                btn.disabled = false;
+                log(`Authenticated: ${user.email}`, 'success');
+                log('Ready to generate test data', 'system');
+            } else {
+                indicator.className = 'w-3 h-3 rounded-full bg-red-500';
+                text.innerText = 'Not authenticated - log in via dashboard first';
+                text.className = 'text-sm font-bold text-red-600';
+                btn.disabled = true;
+                log('Authentication required - log in via index.html first', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
