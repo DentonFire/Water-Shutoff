@@ -458,15 +458,22 @@
     <footer class="bg-navy text-white py-6 px-4 mt-12">
         <div class="max-w-6xl mx-auto text-center">
             <p class="text-blue-200 text-sm">Denton Fire Department • Community Risk Reduction</p>
-            <p class="text-blue-300/50 text-xs mt-2">Questions? Contact <a href="/cdn-cgi/l/email-protection#a8e0ddc6dccdda86e4c7dcdce8cbc1dcd1c7cecccdc6dcc7c686cbc7c5" class="text-yellow hover:underline"><span class="__cf_email__" data-cfemail="246c514a5041560a684b505064474d505d4b4240414a504b4a0a474b49">[email&#160;protected]</span></a></p>
+            <p class="text-xs mt-2" style="color:rgba(147,197,253,0.5);">Questions? Contact <a href="mailto:Hunter.Lott@cityofdenton.com" style="color:#f9c031;text-decoration:underline;">Hunter.Lott@cityofdenton.com</a></p>
         </div>
     </footer>
 
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    <script>
         function showTab(tabName) {
             // Hide all content
             document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
             // Remove active from all tabs
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             // Show selected content
-            document.getElementById('content-' + tabName
+            document.getElementById('content-' + tabName).classList.remove('hidden');
+            document.getElementById('content-' + tabName).classList.add('fade-in');
+            // Activate tab
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+    </script>
+</body>
+</html>
