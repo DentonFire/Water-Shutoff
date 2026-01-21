@@ -132,6 +132,7 @@
                 <p id="login-error" class="text-red-400 font-bold text-xs hidden bg-red-900/30 py-1 rounded border border-red-500/30">Invalid Access</p>
                 <button id="login-btn" onclick="handleAuth()" class="w-full bg-white text-navy font-black py-3 rounded-lg hover:bg-gray-100 active:scale-95 transition-all shadow-lg uppercase tracking-wider text-xs">Authenticate</button>
                 <p id="auth-toggle-text" onclick="toggleAuthMode()" class="text-gray-400 text-[10px] mt-4 cursor-pointer hover:text-white uppercase tracking-widest">Need access? <span class="underline">Create Account</span></p>
+                <p id="forgot-password-link" onclick="forgotPassword()" class="text-blue-400 text-[10px] mt-2 cursor-pointer hover:text-blue-300 uppercase tracking-widest underline">Forgot Password?</p>
             </div>
             <div class="mt-6 flex items-center justify-center gap-2 opacity-60"><div id="secure-light" class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div><p id="secure-text" class="text-[10px] font-mono tracking-widest uppercase text-yellow-200">CHECKING SECURITY...</p></div>
         </div>
@@ -195,7 +196,7 @@
     </div>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, doc, updateDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA", authDomain: "denton-fire-tools.firebaseapp.com", projectId: "denton-fire-tools", storageBucket: "denton-fire-tools.firebasestorage.app", messagingSenderId: "751121603550", appId: "1:751121603550:web:3a8f25b990d45038ae1b4f" };
@@ -270,6 +271,19 @@
         window.cancelVerification = function() { signOut(auth); document.getElementById('verification-modal').classList.add('hidden'); if(verificationInterval) clearInterval(verificationInterval); }
         window.performLogout = function() { if(!confirm("End secure session?")) return; localStorage.removeItem('denton_login_time'); signOut(auth); }
         window.handleEnter = function(e) { if (e.key === 'Enter') window.handleAuth(); }
+        window.forgotPassword = function() {
+            const email = document.getElementById('email').value;
+            const errorMsg = document.getElementById('auth-error');
+            if (!email) { errorMsg.innerText = "Enter your email first"; errorMsg.classList.remove('hidden'); return; }
+            if (!email.endsWith('@cityofdenton.com')) { errorMsg.innerText = "Must be @cityofdenton.com email"; errorMsg.classList.remove('hidden'); return; }
+            sendPasswordResetEmail(auth, email).then(() => {
+                alert("Password reset email sent to " + email + ". Check your inbox.");
+            }).catch(err => {
+                if (err.code === 'auth/user-not-found') errorMsg.innerText = "No account found with this email";
+                else errorMsg.innerText = "Error: " + err.message;
+                errorMsg.classList.remove('hidden');
+            });
+        }
         window.toggleSidebar = function() { document.getElementById('list-sidebar').classList.toggle('-translate-x-full'); }
         window.toggleHistorical = function() { viewHistorical = document.getElementById('historical-toggle').checked; renderData(); }
 
@@ -422,7 +436,7 @@
         window.closePurgeModal = () => document.getElementById('purge-modal').classList.add('hidden');
         window.submitPurge = async function() {
             const pwInput = document.getElementById('purge-pass'); const errorMsg = document.getElementById('purge-error');
-            if (pwInput.value !== "DentonFire1") { errorMsg.classList.remove('hidden'); pwInput.value = ''; return; }
+            if (pwInput.value !== "ADMIN") { errorMsg.classList.remove('hidden'); pwInput.value = ''; return; }
             if (confirm("FINAL WARNING: Delete ALL records permanently?")) {
                 try { const q = collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'); const snap = await getDocs(q); if (snap.empty) { alert("Database is empty."); closePurgeModal(); return; }
                     let docs = [...snap.docs]; while (docs.length > 0) { const batch = writeBatch(db); const chunk = docs.splice(0, 500); chunk.forEach(d => batch.delete(d.ref)); await batch.commit(); }
