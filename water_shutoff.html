@@ -3,477 +3,196 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Water Shutoff System - Visual Guide</title>
+    <title>Water Shutoff Survey</title>
     <link rel="icon" type="image/png" href="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config = { theme: { extend: { colors: { navy: '#152a40', red: '#bf2726', yellow: '#f9c031' } } } }</script>
+    <script>tailwind.config = { theme: { extend: { colors: { navy: '#152a40', red: '#bf2726', yellow: '#f9c031' }, animation: { 'scan': 'scan-line 3s linear infinite' }, keyframes: { 'scan-line': { '0%': { backgroundPosition: '100% 0' }, '100%': { backgroundPosition: '-100% 0' } } } } } }</script>
     <style>
-        .callout { position: absolute; background: #bf2726; color: white; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10; }
-        .callout::after { content: ''; position: absolute; border: 8px solid transparent; }
-        .callout.arrow-left::after { right: 100%; top: 50%; transform: translateY(-50%); border-right-color: #bf2726; }
-        .callout.arrow-right::after { left: 100%; top: 50%; transform: translateY(-50%); border-left-color: #bf2726; }
-        .callout.arrow-down::after { top: 100%; left: 50%; transform: translateX(-50%); border-top-color: #bf2726; }
-        .callout.arrow-up::after { bottom: 100%; left: 50%; transform: translateX(-50%); border-bottom-color: #bf2726; }
-        .highlight-box { border: 3px solid #bf2726; border-radius: 8px; animation: pulse-border 2s infinite; }
-        @keyframes pulse-border { 0%, 100% { border-color: #bf2726; } 50% { border-color: #f9c031; } }
-        .screen-mock { background: #1a1a2e; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); overflow: hidden; }
-        .screen-header { background: linear-gradient(135deg, #152a40, #1e3a5f); padding: 12px 16px; display: flex; align-items: center; gap: 8px; }
-        .screen-dot { width: 12px; height: 12px; border-radius: 50%; }
-        .tab-btn { padding: 12px 24px; font-weight: bold; cursor: pointer; transition: all 0.3s; border-bottom: 3px solid transparent; }
-        .tab-btn.active { border-bottom-color: #f9c031; color: #152a40; background: #f9c031; }
-        .tab-btn:not(.active) { color: #666; }
-        .tab-btn:not(.active):hover { background: #f0f0f0; }
-        .fade-in { animation: fadeIn 0.5s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .number-badge { width: 28px; height: 28px; background: #bf2726; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+        body { background-color: #f3f4f6; padding: 20px; }
+        .paper-doc { background: white; max-width: 40rem; margin: 0 auto; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 0.5rem; }
+        input[type="radio"]:checked + div { background-color: #152a40; color: white; border-color: #152a40; }
+        #address-results::-webkit-scrollbar { width: 6px; }
+        #address-results::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .modal-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        #auth-loading { background-color: #152a40; background-image: url('https://www.transparenttextures.com/patterns/cubes.png'), radial-gradient(circle at top right, #1e3a58, #152a40); }
+        .scan-line-gradient { background: linear-gradient(90deg, #152a40 0%, #ef4444 50%, #152a40 100%); background-size: 200% 100%; }
+        #offline-banner { display: none; position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(90deg, #f59e0b, #d97706); color: white; padding: 10px 16px; text-align: center; font-weight: 700; font-size: 12px; z-index: 10000; text-transform: uppercase; }
+        #offline-banner.show { display: block; }
+        body.offline-mode { padding-top: 56px; }
+        #clipboard-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #152a40; color: white; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; z-index: 10001; opacity: 0; transition: all 0.3s ease; }
+        #clipboard-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        #main-content.visible { opacity: 1; }
     </style>
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <!-- Header -->
-    <header class="bg-navy text-white py-6 px-4 shadow-lg">
-        <div class="max-w-6xl mx-auto">
-            <div class="flex items-center gap-4">
-                <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-16">
-                <div>
-                    <h1 class="text-3xl font-black uppercase tracking-wide">Water Shutoff Tracking System</h1>
-                    <p class="text-blue-200 text-sm">Interactive Visual Guide • Denton Fire Department</p>
-                </div>
-            </div>
-        </div>
-    </header>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    <!-- Navigation Tabs -->
-    <div class="bg-white shadow-md sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto flex overflow-x-auto">
-            <button onclick="showTab('overview')" class="tab-btn active" id="tab-overview">Overview</button>
-            <button onclick="showTab('survey')" class="tab-btn" id="tab-survey">Survey Form</button>
-            <button onclick="showTab('dashboard')" class="tab-btn" id="tab-dashboard">Command Center</button>
-            <button onclick="showTab('firewatch')" class="tab-btn" id="tab-firewatch">Fire Watch</button>
-            <button onclick="showTab('quickref')" class="tab-btn" id="tab-quickref">Quick Reference</button>
+        const firebaseConfig = { apiKey: "AIzaSyC1iKuBTPQLULOnEHISUEoU62nAi_h2nPA", authDomain: "denton-fire-tools.firebaseapp.com", projectId: "denton-fire-tools", storageBucket: "denton-fire-tools.firebasestorage.app", messagingSenderId: "751121603550", appId: "1:751121603550:web:3a8f25b990d45038ae1b4f" };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'denton-fire-tools';
+        let currentUser = null, isOnline = navigator.onLine, pendingSubmissions = [];
+
+        function updateOnlineStatus() { isOnline = navigator.onLine; const banner = document.getElementById('offline-banner'); if (!isOnline) { banner.classList.add('show'); document.body.classList.add('offline-mode'); } else { banner.classList.remove('show'); document.body.classList.remove('offline-mode'); processPendingSubmissions(); } }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        async function processPendingSubmissions() { if (pendingSubmissions.length === 0) return; for (const s of pendingSubmissions) { try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'), s); } catch (e) { console.error("Sync failed:", e); } } pendingSubmissions = []; localStorage.removeItem('denton_pending_submissions'); }
+        function loadPendingSubmissions() { const saved = localStorage.getItem('denton_pending_submissions'); if (saved) { try { pendingSubmissions = JSON.parse(saved); } catch (e) { pendingSubmissions = []; } } }
+
+        function safeRedirect(target) { try { window.location.assign(target); } catch (e) { console.warn("Redirect blocked:", e); const loader = document.getElementById('auth-loading'); if (loader) loader.innerHTML = '<div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center"><div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div><img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-16 mx-auto mb-4"><h2 class="text-2xl font-black text-white mb-1 uppercase">Login Required</h2><p class="text-blue-200 text-xs mb-6 uppercase">Water Shutoff Survey</p><a href="'+target+'" class="block w-full bg-white text-navy font-black py-3 rounded-lg uppercase text-xs">Proceed to Login</a></div>'; } }
+
+        onAuthStateChanged(auth, (user) => {
+            const loadingScreen = document.getElementById('auth-loading');
+            const mainContent = document.getElementById('main-content');
+            if (!user) { safeRedirect("index.html?redirect=water_shutoff"); return; }
+            if (!user.email.endsWith('@cityofdenton.com')) { alert("Unauthorized"); safeRedirect("index.html"); return; }
+            if (!user.emailVerified) { alert("Please verify your email first."); signOut(auth); safeRedirect("index.html"); return; }
+            const loginTime = localStorage.getItem('denton_login_time');
+            if (loginTime && (Date.now() - parseInt(loginTime) > 30*24*60*60*1000)) { alert("Session Expired."); localStorage.removeItem('denton_login_time'); signOut(auth); safeRedirect("index.html?redirect=water_shutoff"); return; }
+            currentUser = user;
+            if(loadingScreen) { loadingScreen.style.opacity = '0'; setTimeout(() => { loadingScreen.style.display = 'none'; if(mainContent) mainContent.classList.add('visible'); }, 500); }
+            updateOnlineStatus(); loadPendingSubmissions();
+        });
+
+        const defaultUnits = ["BAT1", "BAT2", "RIV9", "E1", "T1", "E2", "E3", "E4", "E6", "Q5", "E7", "E8", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "R1", "BLK3"];
+        window.loadUnits = function() { const select = document.getElementById('unit-select'); select.innerHTML = '<option value="">Select Unit...</option>'; defaultUnits.forEach(u => { const opt = document.createElement('option'); opt.value = u; opt.innerText = u; select.appendChild(opt); }); const savedUnits = JSON.parse(localStorage.getItem('denton_custom_units') || '[]'); if (savedUnits.length > 0) { const divider = document.createElement('option'); divider.disabled = true; divider.innerText = "--- Saved Units ---"; select.appendChild(divider); savedUnits.forEach(u => { if (!defaultUnits.includes(u)) { const opt = document.createElement('option'); opt.value = u; opt.innerText = u; select.appendChild(opt); } }); } const addNew = document.createElement('option'); addNew.value = "ADD_NEW"; addNew.innerText = "➕ Add New Unit..."; select.appendChild(addNew); }
+        window.handleUnitChange = function() { const select = document.getElementById('unit-select'); const customInputDiv = document.getElementById('custom-unit-div'); if (select.value === 'ADD_NEW') { customInputDiv.classList.remove('hidden'); document.getElementById('custom-unit-input').focus(); } else { customInputDiv.classList.add('hidden'); } }
+        window.saveNewUnit = function(name) { if (!name) return; const savedUnits = JSON.parse(localStorage.getItem('denton_custom_units') || '[]'); if (!savedUnits.includes(name) && !defaultUnits.includes(name)) { savedUnits.push(name); localStorage.setItem('denton_custom_units', JSON.stringify(savedUnits)); } }
+
+        window.addEventListener('DOMContentLoaded', () => { const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); document.getElementById('datetime').value = now.toISOString().slice(0, 16); loadUnits(); });
+
+        window.initiateSubmit = function() {
+            const address = document.getElementById('address').value;
+            const dateTime = document.getElementById('datetime').value;
+            const systemTypeElement = document.querySelector('input[name="systemType"]:checked');
+            let unitVal = document.getElementById('unit-select').value;
+            if (unitVal === 'ADD_NEW') { const ci = document.getElementById('custom-unit-input').value; if (ci && ci.trim() !== "") unitVal = ci.trim().toUpperCase(); else unitVal = null; }
+            const damageElement = document.querySelector('input[name="damage"]:checked');
+            const damage = damageElement ? damageElement.value : "No";
+            const notes = document.getElementById('notes').value;
+            const missingFields = [];
+            if (!unitVal) missingFields.push("Unit Number");
+            if (!address || !address.trim()) missingFields.push("Shutoff Address");
+            if (!systemTypeElement) missingFields.push("System Type");
+            if (!dateTime) missingFields.push("Date/Time");
+            if (damage === "Yes" && (!notes || !notes.trim())) missingFields.push("Description of Damage");
+            if (missingFields.length > 0) { alert("Please fill in:\n\n- " + missingFields.join("\n- ")); return; }
+            if (document.getElementById('fire-watch-check').checked) finalSubmit(); else document.getElementById('firewatch-modal').classList.remove('hidden');
+        }
+
+        window.finalSubmit = async function() {
+            document.getElementById('firewatch-modal').classList.add('hidden');
+            const btn = document.getElementById('submit-btn');
+            const originalText = "📤 Submit & Generate Email";
+            btn.innerText = "⏳ Processing..."; btn.disabled = true; btn.classList.add('opacity-50');
+
+            const address = document.getElementById('address').value;
+            const dateTime = document.getElementById('datetime').value;
+            const systemType = document.querySelector('input[name="systemType"]:checked').value;
+            const gps = document.getElementById('gps-coords').value;
+            const damage = document.querySelector('input[name="damage"]:checked')?.value || 'No';
+            const notes = document.getElementById('notes').value;
+            const locStreet = document.getElementById('loc-street').value;
+            const loc20 = document.getElementById('loc-20ft').value;
+            const locBeyond = document.getElementById('loc-beyond').value;
+            let unitVal = document.getElementById('unit-select').value;
+            if (unitVal === 'ADD_NEW') { unitVal = document.getElementById('custom-unit-input').value.trim().toUpperCase(); saveNewUnit(unitVal); }
+            const fireWatchStatus = document.getElementById('fire-watch-check').checked ? "Yes" : "No";
+            const isWaterMeter = (systemType === 'Water Meter');
+
+            const reportData = { unit: unitVal, address: address, dateTime: dateTime, systemType: systemType, gps: gps || "", damage: damage, notes: notes || "", fireWatch: fireWatchStatus, locStreet: isWaterMeter ? locStreet : "N/A", loc20: isWaterMeter ? loc20 : "N/A", locBeyond: isWaterMeter ? locBeyond : "N/A", timestamp: serverTimestamp(), userId: currentUser ? currentUser.uid : 'anonymous', submittedAt: new Date().toISOString() };
+
+            try {
+                if (!isOnline) { const offlineData = { ...reportData, timestamp: new Date().toISOString() }; pendingSubmissions.push(offlineData); localStorage.setItem('denton_pending_submissions', JSON.stringify(pendingSubmissions)); alert("📱 You're offline. Report saved locally and will sync when online."); generateEmail(reportData); }
+                else if (db && currentUser) { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'water_shutoffs'), reportData); alert("✅ Report logged! Opening email client..."); generateEmail(reportData); }
+                document.getElementById('shutoffForm').reset();
+                document.getElementById('location-details').classList.add('hidden');
+                document.getElementById('damage-details').classList.add('hidden');
+                document.getElementById('custom-unit-div').classList.add('hidden');
+                document.getElementById('gps-status').classList.add('hidden');
+                loadUnits();
+                const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                document.getElementById('datetime').value = now.toISOString().slice(0, 16);
+            } catch (e) { console.error("Submit Error:", e); alert("Database error. Email fallback generated."); generateEmail(reportData); }
+            finally { btn.innerText = originalText; btn.disabled = false; btn.classList.remove('opacity-50'); }
+        }
+
+        function generateEmail(data) {
+            let recipient = data.systemType === "Water Meter" ? "watermetering@cityofdenton.com" : "FirePrevention@cityofdenton.com";
+            let subject = data.systemType === "Water Meter" ? `Water Meter Shutoff - Unit ${data.unit}` : `Sprinkler System Shutoff - Unit ${data.unit}`;
+            let locationBlock = data.systemType === "Water Meter" ? `LOCATION DETAILS\n--------------------------------\nAt Street: ${data.locStreet}\nWithin 20ft: ${data.loc20}\nBeyond 20ft: ${data.locBeyond}\n\n` : '';
+            let mapLink = data.gps ? `https://www.google.com/maps/search/?api=1&query=${data.gps}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
+            const body = `SHUTOFF REPORT\n--------------------------------\nUNIT: ${data.unit}\nTYPE: ${data.systemType}\nADDRESS: ${data.address}\nDATE/TIME: ${data.dateTime.replace('T', ' ')}\nFIRE WATCH ISSUED: ${data.fireWatch}\n\n${locationBlock}MAP LINK: ${mapLink}\n\nDAMAGE REPORT\n--------------------------------\nDamaged: ${data.damage}\n${data.damage === 'Yes' ? `Description: ${data.notes}` : ''}\n\nLogged via Denton Fire Dept Water Shutoff Survey`;
+            window.lastEmailData = { recipient, subject, body };
+            window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            setTimeout(() => document.getElementById('email-fallback-modal').classList.remove('hidden'), 1000);
+        }
+
+        window.copyEmailToClipboard = function() { const data = window.lastEmailData; if (!data) return; const fullText = `TO: ${data.recipient}\nSUBJECT: ${data.subject}\n\n${data.body}`; navigator.clipboard.writeText(fullText).then(() => { showToast("✅ Email copied!"); document.getElementById('email-fallback-modal').classList.add('hidden'); }).catch(() => { const textarea = document.createElement('textarea'); textarea.value = fullText; document.body.appendChild(textarea); textarea.select(); document.execCommand('copy'); document.body.removeChild(textarea); showToast("✅ Email copied!"); document.getElementById('email-fallback-modal').classList.add('hidden'); }); }
+        window.closeEmailFallback = function() { document.getElementById('email-fallback-modal').classList.add('hidden'); }
+        function showToast(msg) { const toast = document.getElementById('clipboard-toast'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); }
+
+        window.toggleQrModal = function() { const modal = document.getElementById('qr-modal'); modal.classList.toggle('hidden'); if (!modal.classList.contains('hidden')) document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('https://dentonfire.github.io/Water-Shutoff/water_shutoff.html')}`; }
+        window.closeFireWatchModal = function() { document.getElementById('firewatch-modal').classList.add('hidden'); }
+
+        window.getGPS = function() {
+            const btn = document.getElementById('gps-btn'); const statusDiv = document.getElementById('gps-status');
+            btn.innerHTML = "<span>⏳</span> Requesting...";
+            if (!navigator.geolocation) { alert("Geolocation not supported."); btn.innerHTML = "<span>📍</span> Get My Location"; return; }
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const lat = pos.coords.latitude, lon = pos.coords.longitude;
+                document.getElementById('gps-coords').value = `${lat},${lon}`;
+                statusDiv.classList.remove('hidden'); statusDiv.className = "text-xs text-green-600 mt-1";
+                statusDiv.innerText = `✓ ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`).then(r => r.json()).then(d => { if (d.features && d.features.length) { const p = d.features[0].properties; const addr = [p.name, p.housenumber, p.street, p.city].filter(Boolean).join(', '); if(addr) document.getElementById('address').value = addr; } });
+                btn.innerHTML = "<span>📍</span> Update Location";
+            }, (error) => {
+                btn.innerHTML = "<span>📍</span> Get My Location";
+                statusDiv.classList.remove('hidden'); statusDiv.className = "text-xs text-red-600 mt-1";
+                switch(error.code) { case error.PERMISSION_DENIED: statusDiv.innerText = "✗ Permission denied. Enable in browser settings."; break; case error.POSITION_UNAVAILABLE: statusDiv.innerText = "✗ Location unavailable."; break; case error.TIMEOUT: statusDiv.innerText = "✗ Request timed out."; break; default: statusDiv.innerText = "✗ Unable to get location."; }
+            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+        }
+
+        window.toggleFields = function() { const type = document.querySelector('input[name="systemType"]:checked').value; const detailsDiv = document.getElementById('location-details'); const info = document.getElementById('routing-info'); if (type === 'Water Meter') { detailsDiv.classList.remove('hidden'); info.innerHTML = `Routes to: <strong>Water Distribution Dept.</strong>`; } else { detailsDiv.classList.add('hidden'); info.innerHTML = `Routes to: <strong>Fire Prevention Division</strong>`; } }
+        window.toggleDamage = function() { const val = document.querySelector('input[name="damage"]:checked').value; const div = document.getElementById('damage-details'); if (val === 'Yes') div.classList.remove('hidden'); else { div.classList.add('hidden'); document.getElementById('notes').value = ''; } }
+
+        let debounceTimer;
+        window.handleAddressInput = function(e) { const query = e.target.value; const resDiv = document.getElementById('address-results'); resDiv.innerHTML = ''; resDiv.classList.add('hidden'); clearTimeout(debounceTimer); if (query.length < 3) return; debounceTimer = setTimeout(async () => { try { const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=33.2148&lon=-97.1331&limit=5`); if(!r.ok) return; const d = await r.json(); if(d.features && d.features.length) { resDiv.classList.remove('hidden'); d.features.forEach(f => { const p = f.properties; const name = [p.name, p.housenumber, p.street, p.city].filter(Boolean).join(', '); const div = document.createElement('div'); div.className = "p-3 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-100"; div.innerText = name; div.onclick = () => { document.getElementById('address').value = name; resDiv.classList.add('hidden'); if(f.geometry?.coordinates) { const [lon, lat] = f.geometry.coordinates; document.getElementById('gps-coords').value = `${lat},${lon}`; document.getElementById('gps-status').classList.remove('hidden'); document.getElementById('gps-status').className = "text-xs text-green-600 mt-1"; document.getElementById('gps-status').innerText = "✓ Location Auto-filled"; } }; resDiv.appendChild(div); }); } } catch(e) {} }, 300); }
+    </script>
+</head>
+<body class="relative">
+    <div id="offline-banner">⚠️ Offline. Reports saved locally and will sync when connection is restored.</div>
+    <div id="clipboard-toast"></div>
+    <div id="auth-loading" class="fixed inset-0 z-[10000] flex items-center justify-center transition-opacity duration-500 px-4">
+        <div class="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-2 scan-line-gradient animate-scan"></div>
+            <img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-16 mx-auto mb-4">
+            <h2 class="text-2xl font-black text-white mb-1 uppercase">Verifying Access</h2>
+            <p class="text-blue-200 text-xs mb-6 uppercase">Water Shutoff Survey</p>
+            <div class="text-white/70 text-sm animate-pulse">Connecting to secure server...</div>
+            <div class="mt-6 flex items-center justify-center gap-2 opacity-60"><div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div><p class="text-[10px] font-mono uppercase text-white">CHECKING CREDENTIALS</p></div>
         </div>
     </div>
-
-    <main class="max-w-6xl mx-auto py-8 px-4">
-        <!-- OVERVIEW TAB -->
-        <section id="content-overview" class="fade-in">
-            <h2 class="text-2xl font-black text-navy mb-6">System Overview</h2>
-            
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
-                <h3 class="text-lg font-bold text-navy mb-4">What This System Does</h3>
-                <p class="text-gray-600 mb-4">When firefighters shut off water to a property (either at the meter or a sprinkler system), this system:</p>
-                <div class="grid md:grid-cols-3 gap-4">
-                    <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
-                        <div class="font-bold text-blue-800 mb-2">📝 Logs the Incident</div>
-                        <p class="text-sm text-blue-700">Records location, time, unit, and system type in a central database</p>
-                    </div>
-                    <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
-                        <div class="font-bold text-green-800 mb-2">📧 Routes Email</div>
-                        <p class="text-sm text-green-700">Automatically sends to Water Dept or Fire Prevention based on type</p>
-                    </div>
-                    <div class="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500">
-                        <div class="font-bold text-purple-800 mb-2">🗺️ Maps Everything</div>
-                        <p class="text-sm text-purple-700">Shows all active shutoffs on a real-time map for tracking</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Fire Watch Explanation -->
-            <div class="bg-white border-2 border-red-500 rounded-xl shadow-lg p-6 mb-8">
-                <h3 class="text-xl font-black mb-4 flex items-center gap-3 text-red-700">
-                    <span class="text-3xl">🔥</span> Why Fire Watch Tracking Matters
-                </h3>
-                <p class="mb-4 text-gray-800"><strong>Fire Watch</strong> is a temporary measure intended to ensure continuous and systematic surveillance of a building by one or more qualified individuals when a required fire protection system is out of service.</p>
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
-                    <p class="font-bold mb-2 text-red-800">The system helps us:</p>
-                    <ul class="space-y-2 text-sm text-gray-700">
-                        <li class="flex items-start gap-2"><span class="text-red-600">✓</span> Track which properties currently have fire watches in place</li>
-                        <li class="flex items-start gap-2"><span class="text-red-600">✓</span> Identify properties that have been on fire watch for extended periods</li>
-                        <li class="flex items-start gap-2"><span class="text-red-600">✓</span> Follow up to ensure systems are being restored in a timely manner</li>
-                        <li class="flex items-start gap-2"><span class="text-red-600">✓</span> Maintain accountability for life safety compliance</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- System Flow -->
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-lg font-bold text-navy mb-6">How It All Connects</h3>
-                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div class="text-center p-4">
-                        <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <span class="text-4xl">🚒</span>
-                        </div>
-                        <div class="font-bold text-navy">Field Crew</div>
-                        <div class="text-xs text-gray-500">Submits Survey</div>
-                    </div>
-                    <div class="text-4xl text-gray-300">→</div>
-                    <div class="text-center p-4">
-                        <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <span class="text-4xl">📧</span>
-                        </div>
-                        <div class="font-bold text-navy">Email Sent</div>
-                        <div class="text-xs text-gray-500">To Right Dept</div>
-                    </div>
-                    <div class="text-4xl text-gray-300">→</div>
-                    <div class="text-center p-4">
-                        <div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <span class="text-4xl">🗺️</span>
-                        </div>
-                        <div class="font-bold text-navy">Dashboard</div>
-                        <div class="text-xs text-gray-500">Shows on Map</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- SURVEY FORM TAB -->
-        <section id="content-survey" class="hidden fade-in">
-            <h2 class="text-2xl font-black text-navy mb-6">Water Shutoff Survey Form</h2>
-            
-            <!-- Step by Step -->
-            <div class="space-y-6 mb-8">
-                <div class="bg-white rounded-xl shadow-lg p-6 flex gap-4">
-                    <div class="number-badge">1</div>
-                    <div class="flex-1">
-                        <h4 class="font-bold text-navy mb-2">Select Your Unit</h4>
-                        <p class="text-gray-600 text-sm mb-3">Choose from the dropdown: E1, T1, BAT1, etc. If your unit isn't listed, select "Add New Unit" to create it.</p>
-                        <div class="bg-gray-100 rounded-lg p-3 inline-block">
-                            <select class="border-2 border-navy rounded px-4 py-2 font-bold text-navy bg-white">
-                                <option>Select Unit...</option>
-                                <option>E1</option>
-                                <option>T1</option>
-                                <option>BAT1</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-lg p-6 flex gap-4">
-                    <div class="number-badge">2</div>
-                    <div class="flex-1">
-                        <h4 class="font-bold text-navy mb-2">Enter Location</h4>
-                        <p class="text-gray-600 text-sm mb-3">Type the address (auto-complete helps) OR tap "Get My Location" for GPS coordinates.</p>
-                        <div class="flex flex-col sm:flex-row gap-3">
-                            <input type="text" placeholder="123 Example St, Denton, TX" class="border-2 border-gray-300 rounded px-4 py-2 flex-1">
-                            <button class="bg-white border-2 border-navy text-navy font-bold px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-navy hover:text-white transition">
-                                <span>📍</span> Get My Location
-                            </button>
-                        </div>
-                        <p class="text-xs text-green-600 mt-2">💡 <strong>Pro tip:</strong> Use GPS when on scene for accurate mapping!</p>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-lg p-6 flex gap-4">
-                    <div class="number-badge">3</div>
-                    <div class="flex-1">
-                        <h4 class="font-bold text-navy mb-2">Select System Type</h4>
-                        <p class="text-gray-600 text-sm mb-3">This determines where the email gets routed:</p>
-                        <div class="grid sm:grid-cols-2 gap-4">
-                            <div class="border-2 border-blue-500 bg-blue-50 rounded-lg p-4 text-center">
-                                <div class="text-3xl mb-2">💧</div>
-                                <div class="font-bold text-blue-800">Water Meter</div>
-                                <div class="text-xs text-blue-600 mt-1">→ Water Distribution Dept</div>
-                            </div>
-                            <div class="border-2 border-red-500 bg-red-50 rounded-lg p-4 text-center">
-                                <div class="text-3xl mb-2">🧯</div>
-                                <div class="font-bold text-red-800">Sprinkler System</div>
-                                <div class="text-xs text-red-600 mt-1">→ Fire Prevention Division</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-lg p-6 flex gap-4">
-                    <div class="number-badge">4</div>
-                    <div class="flex-1">
-                        <h4 class="font-bold text-navy mb-2">Fire Watch & Damage</h4>
-                        <p class="text-gray-600 text-sm mb-3">Check the Fire Watch box if one was established. Note any system damage.</p>
-                        <div class="flex flex-wrap gap-4 items-center">
-                            <label class="flex items-center gap-2 bg-yellow-50 border-2 border-yellow-400 px-4 py-3 rounded-lg cursor-pointer">
-                                <input type="checkbox" class="w-5 h-5">
-                                <span class="font-bold text-navy">🔥 Fire Watch Issued</span>
-                            </label>
-                            <a href="https://dentonfire.github.io/Fire-Watch/" target="_blank" class="bg-red text-white px-4 py-3 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-red-700 transition">
-                                🔥 Fire Watch Guidelines
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-lg p-6 flex gap-4">
-                    <div class="number-badge">5</div>
-                    <div class="flex-1">
-                        <h4 class="font-bold text-navy mb-2">Submit</h4>
-                        <p class="text-gray-600 text-sm mb-3">Tap the submit button. Your email app will open with everything pre-filled - just hit Send!</p>
-                        <button class="bg-navy text-white font-bold px-8 py-4 rounded-lg text-lg flex items-center gap-3 hover:bg-gray-800 transition">
-                            📤 Submit & Generate Email
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- QR Feature -->
-            <div class="bg-gradient-to-r from-navy to-blue-800 rounded-xl shadow-lg p-6 text-white">
-                <div class="flex items-center gap-6">
-                    <div class="bg-white p-4 rounded-xl">
-                        <svg class="w-16 h-16 text-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-black mb-2">📱 Share With Your Crew</h3>
-                        <p class="text-blue-200">Tap the QR button in the bottom-right corner of the survey form. Other firefighters can scan it to instantly open the form on their phones!</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- DASHBOARD TAB -->
-        <section id="content-dashboard" class="hidden fade-in">
-            <h2 class="text-2xl font-black text-navy mb-6">Command Center Dashboard</h2>
-            
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
-                <h3 class="text-lg font-bold text-navy mb-4">Dashboard Features</h3>
-                
-                <div class="grid md:grid-cols-2 gap-6">
-                    <!-- Map Feature -->
-                    <div class="border-2 border-gray-200 rounded-lg p-4">
-                        <div class="flex items-center gap-3 mb-3">
-                            <span class="text-2xl">🗺️</span>
-                            <h4 class="font-bold text-navy">Interactive Map</h4>
-                        </div>
-                        <ul class="text-sm text-gray-600 space-y-2">
-                            <li class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#3b82f6;"></span> Blue markers = Water Meters</li>
-                            <li class="flex items-center gap-2"><span class="inline-block w-3 h-3" style="background:#ef4444;border-radius:2px;"></span> Red markers = Sprinkler Systems</li>
-                            <li class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#3b82f6;box-shadow:0 0 0 2px #22c55e;"></span> Green ring = Has follow-up</li>
-                            <li class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#9ca3af;"></span> Gray = Resolved</li>
-                        </ul>
-                    </div>
-
-                    <!-- Incident Log -->
-                    <div class="border-2 border-gray-200 rounded-lg p-4">
-                        <div class="flex items-center gap-3 mb-3">
-                            <span class="text-2xl">📋</span>
-                            <h4 class="font-bold text-navy">Incident Log</h4>
-                        </div>
-                        <ul class="text-sm text-gray-600 space-y-2">
-                            <li>• Click any incident to fly to its location on the map</li>
-                            <li>• See which technician last followed up</li>
-                            <li>• 🔥 icon shows Fire Watch properties</li>
-                            <li>• Click envelope to send follow-up email</li>
-                        </ul>
-                    </div>
-
-                    <!-- Analytics -->
-                    <div class="border-2 border-gray-200 rounded-lg p-4">
-                        <div class="flex items-center gap-3 mb-3">
-                            <span class="text-2xl">📊</span>
-                            <h4 class="font-bold text-navy">Analytics</h4>
-                        </div>
-                        <ul class="text-sm text-gray-600 space-y-2">
-                            <li>• View trends over time</li>
-                            <li>• Compare Water Meter vs Sprinkler incidents</li>
-                            <li>• Track Fire Watch properties</li>
-                            <li>• Monthly/weekly breakdowns</li>
-                        </ul>
-                    </div>
-
-                    <!-- Admin Tools -->
-                    <div class="border-2 border-gray-200 rounded-lg p-4">
-                        <div class="flex items-center gap-3 mb-3">
-                            <span class="text-2xl">⚙️</span>
-                            <h4 class="font-bold text-navy">Admin Tools</h4>
-                        </div>
-                        <ul class="text-sm text-gray-600 space-y-2">
-                            <li>• Download CSV export for reports</li>
-                            <li>• Filter by date range and status</li>
-                            <li>• Resolve incidents after follow-up</li>
-                            <li>• Purge data (admin password required)</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Visual mockup -->
-            <div class="screen-mock">
-                <div class="screen-header">
-                    <div class="screen-dot bg-red-500"></div>
-                    <div class="screen-dot bg-yellow-500"></div>
-                    <div class="screen-dot bg-green-500"></div>
-                    <span class="text-white/60 text-xs ml-2">Command Center - Water Shutoff Tracking</span>
-                </div>
-                <div class="bg-slate-900 p-4">
-                    <div class="flex gap-4">
-                        <!-- Sidebar mockup -->
-                        <div class="w-64 bg-slate-800 rounded-lg p-3">
-                            <div class="text-xs text-slate-400 uppercase mb-2">Incident Log</div>
-                            <div class="space-y-2">
-                                <div class="bg-slate-700 rounded p-2 flex items-center gap-2">
-                                    <div class="w-3 h-3 rounded-full bg-blue-500"></div>
-                                    <div class="text-xs text-white">123 Main St</div>
-                                    <div class="text-xs text-yellow-400 ml-auto">🔥</div>
-                                </div>
-                                <div class="bg-slate-700 rounded p-2 flex items-center gap-2">
-                                    <div class="w-3 h-3" style="background:#ef4444;border-radius:2px;"></div>
-                                    <div class="text-xs text-white">456 Oak Ave</div>
-                                </div>
-                                <div class="bg-slate-700/50 rounded p-2 flex items-center gap-2">
-                                    <div class="w-3 h-3 rounded-full bg-gray-500"></div>
-                                    <div class="text-xs text-gray-400">789 Elm St (Resolved)</div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Map mockup -->
-                        <div class="flex-1 bg-slate-700 rounded-lg h-64 relative overflow-hidden">
-                            <div class="absolute inset-0 opacity-30" style="background-image: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23334155%22 width=%22100%22 height=%22100%22/><path d=%22M0 50h100M50 0v100%22 stroke=%22%23475569%22 stroke-width=%221%22/></svg>');"></div>
-                            <div class="absolute top-1/4 left-1/3 w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
-                            <div class="absolute top-1/2 left-1/2 w-4 h-4 border-2 border-white shadow-lg" style="background:#ef4444;border-radius:2px;"></div>
-                            <div class="absolute top-2/3 left-1/4 w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg ring-2 ring-green-400"></div>
-                            <div class="absolute bottom-4 left-4 bg-slate-800/90 rounded px-3 py-2 text-xs text-white flex items-center gap-3">
-                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full bg-blue-500"></span> Meter</span>
-                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3" style="background:#ef4444;border-radius:2px;"></span> System</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- FIRE WATCH TAB -->
-        <section id="content-firewatch" class="hidden fade-in">
-            <h2 class="text-2xl font-black text-navy mb-6">Fire Watch Integration</h2>
-            
-            <div class="bg-white border-2 border-red-500 rounded-xl shadow-lg p-6 mb-8">
-                <h3 class="text-xl font-black mb-4 text-red-700">🔥 What is Fire Watch?</h3>
-                <p class="mb-4 text-gray-800"><strong>Fire Watch</strong> is a temporary measure intended to ensure continuous and systematic surveillance of a building or portion thereof by one or more qualified individuals or standby personnel.</p>
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p class="font-bold text-red-800">Per Denton Fire Guidelines:</p>
-                    <ul class="mt-2 space-y-1 text-sm text-gray-700">
-                        <li>• Required when a fire protection system is out of service</li>
-                        <li>• Fire Prevention Division must be notified immediately</li>
-                        <li>• Patrols shall not exceed 60 minutes apart</li>
-                        <li>• Fire Watch shall ONLY be terminated by the Fire Code Official</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="grid md:grid-cols-2 gap-6 mb-8">
-                <div class="bg-white rounded-xl shadow-lg p-6">
-                    <h4 class="font-bold text-navy mb-4 flex items-center gap-2">
-                        <span class="text-2xl">📝</span> In the Survey Form
-                    </h4>
-                    <p class="text-gray-600 text-sm mb-4">When submitting a shutoff report, check the "Fire Watch Issued" box if applicable. This:</p>
-                    <ul class="text-sm space-y-2">
-                        <li class="flex items-start gap-2"><span class="text-green-500">✓</span> Flags the property on the Command Center map</li>
-                        <li class="flex items-start gap-2"><span class="text-green-500">✓</span> Shows 🔥 icon in the incident log</li>
-                        <li class="flex items-start gap-2"><span class="text-green-500">✓</span> Helps track how long fire watch has been in place</li>
-                        <li class="flex items-start gap-2"><span class="text-green-500">✓</span> Includes status in the email to Fire Prevention</li>
-                    </ul>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-lg p-6">
-                    <h4 class="font-bold text-navy mb-4 flex items-center gap-2">
-                        <span class="text-2xl">📋</span> Fire Watch Guidelines
-                    </h4>
-                    <p class="text-gray-600 text-sm mb-4">Access the full Fire Watch guidelines resource:</p>
-                    <a href="https://dentonfire.github.io/Fire-Watch/" target="_blank" class="block bg-red text-white text-center font-bold py-4 rounded-lg hover:bg-red-700 transition text-lg">
-                        🔥 Open Fire Watch Guidelines
-                    </a>
-                    <p class="text-xs text-gray-500 mt-3 text-center">dentonfire.github.io/Fire-Watch/</p>
-                </div>
-            </div>
-
-            <div class="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-6">
-                <h4 class="font-bold text-yellow-800 mb-3 flex items-center gap-2">
-                    <span class="text-2xl">⚠️</span> Why We Track This
-                </h4>
-                <p class="text-yellow-800">If we notice a property has been on fire watch for an extended period (days or weeks), we can follow up to ensure the suppression system is being restored. Prolonged fire watches indicate potential compliance issues that need attention.</p>
-            </div>
-        </section>
-
-        <!-- QUICK REFERENCE TAB -->
-        <section id="content-quickref" class="hidden fade-in">
-            <h2 class="text-2xl font-black text-navy mb-6">Quick Reference</h2>
-            
-            <!-- URLs -->
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-                <h3 class="text-lg font-bold text-navy mb-4">🔗 Direct Links</h3>
-                <div class="space-y-3">
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                        <span class="font-bold text-navy min-w-32">Survey Form:</span>
-                        <a href="https://dentonfire.github.io/Water-Shutoff/water_shutoff.html" target="_blank" class="text-blue-600 hover:underline break-all">dentonfire.github.io/Water-Shutoff/water_shutoff.html</a>
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                        <span class="font-bold text-navy min-w-32">Command Center:</span>
-                        <a href="https://dentonfire.github.io/Water-Shutoff/" target="_blank" class="text-blue-600 hover:underline break-all">dentonfire.github.io/Water-Shutoff/</a>
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                        <span class="font-bold text-navy min-w-32">Fire Watch:</span>
-                        <a href="https://dentonfire.github.io/Fire-Watch/" target="_blank" class="text-blue-600 hover:underline break-all">dentonfire.github.io/Fire-Watch/</a>
-                    </div>
-                </div>
-            </div>
-
-            <!-- First Time Setup -->
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-                <h3 class="text-lg font-bold text-navy mb-4">🆕 First Time Setup</h3>
-                <ol class="space-y-2">
-                    <li class="flex items-start gap-3"><span class="number-badge text-sm">1</span><span>Open the Survey Form link</span></li>
-                    <li class="flex items-start gap-3"><span class="number-badge text-sm">2</span><span>Click "Create Account"</span></li>
-                    <li class="flex items-start gap-3"><span class="number-badge text-sm">3</span><span>Enter your <strong>@cityofdenton.com</strong> email</span></li>
-                    <li class="flex items-start gap-3"><span class="number-badge text-sm">4</span><span>Create a password (6+ characters)</span></li>
-                    <li class="flex items-start gap-3"><span class="number-badge text-sm">5</span><span>Check email for verification link</span></li>
-                    <li class="flex items-start gap-3"><span class="number-badge text-sm">6</span><span>Log in and you're ready!</span></li>
-                </ol>
-                <div class="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
-                    <strong>💡 Note:</strong> City email scanners may auto-click verification links. If it says "expired", just try logging in - you're probably already verified!
-                </div>
-            </div>
-
-            <!-- Troubleshooting -->
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-lg font-bold text-navy mb-4">🔧 Quick Troubleshooting</h3>
-                <div class="space-y-4">
-                    <div>
-                        <p class="font-bold text-gray-800">Can't log in?</p>
-                        <p class="text-sm text-gray-600">• Use your @cityofdenton.com email • Click "Forgot Password?" to reset</p>
-                    </div>
-                    <div>
-                        <p class="font-bold text-gray-800">Email not opening?</p>
-                        <p class="text-sm text-gray-600">• A popup appears with "Copy to Clipboard" option • Paste manually into your email app</p>
-                    </div>
-                    <div>
-                        <p class="font-bold text-gray-800">GPS not working?</p>
-                        <p class="text-sm text-gray-600">• Allow location access in phone settings • Or just type the address manually</p>
-                    </div>
-                    <div>
-                        <p class="font-bold text-gray-800">No cell service?</p>
-                        <p class="text-sm text-gray-600">• The app works offline! • Data syncs automatically when you get signal</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- Footer -->
-    <footer class="bg-navy text-white py-6 px-4 mt-12">
-        <div class="max-w-6xl mx-auto text-center">
-            <p class="text-blue-200 text-sm">Denton Fire Department • Community Risk Reduction</p>
-            <p class="text-xs mt-2" style="color:rgba(147,197,253,0.5);">Questions? Contact <a href="mailto:Hunter.Lott@cityofdenton.com" style="color:#f9c031;text-decoration:underline;">Hunter.Lott@cityofdenton.com</a></p>
+    <div id="main-content" class="opacity-0 transition-opacity duration-300">
+        <div class="paper-doc">
+            <div class="text-center border-b-4 border-yellow pb-6 mb-6 mt-4"><img src="https://files.constantcontact.com/3720c3fd901/10017eb4-f7d2-424d-92ed-c1b5424b9869.png" class="h-20 mx-auto mb-3"><h1 class="text-2xl font-black text-navy uppercase tracking-wide">Water Shutoff Survey</h1><p class="text-gray-600 text-sm mt-2">Log Sprinkler or Water Meter shutoffs for Fire Prevention & Water Dept.</p></div>
+            <form id="shutoffForm" class="space-y-8">
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200"><h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">1. Unit Identification</h2><div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Select Unit <span class="text-red">*</span></label><select id="unit-select" onchange="handleUnitChange()" class="w-full border border-gray-300 rounded p-2 bg-white font-bold text-navy"></select><div id="custom-unit-div" class="hidden mt-3"><label class="block text-xs font-bold text-blue-600 uppercase mb-1">Enter New Unit Name:</label><input type="text" id="custom-unit-input" class="w-full border-2 border-blue-300 rounded p-2 uppercase placeholder-gray-400" placeholder="Ex: E9, SQ1"></div></div></div>
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200"><h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">2. Location & Time</h2><div class="space-y-4"><div id="address-container" class="relative"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Shutoff Address <span class="text-red">*</span></label><input type="text" id="address" oninput="handleAddressInput(event)" class="w-full border border-gray-300 rounded p-2" placeholder="123 Example St, Denton, TX" autocomplete="off"><div id="address-results" class="absolute z-10 w-full bg-white border border-gray-300 rounded-b shadow-lg hidden mt-0 max-h-60 overflow-y-auto"></div></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Date/Time <span class="text-red">*</span></label><input type="datetime-local" id="datetime" class="w-full border border-gray-300 rounded p-2"></div><div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">GPS Coords (Optional)</label><button type="button" id="gps-btn" onclick="getGPS()" class="w-full bg-white border border-navy text-navy font-bold py-2 rounded hover:bg-navy hover:text-white transition text-xs flex items-center justify-center gap-2"><span>📍</span> Get My Location</button><input type="hidden" id="gps-coords"><div id="gps-status" class="text-xs text-green-600 mt-1 hidden">✓ Location Acquired</div></div></div></div></div>
+                <div><h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">3. System Information</h2><div class="grid grid-cols-2 gap-4"><label class="cursor-pointer"><input type="radio" name="systemType" value="Water Meter" class="hidden" onchange="toggleFields()"><div class="border-2 border-gray-200 rounded-lg p-4 text-center hover:border-navy transition font-bold text-gray-600">💧 Water Meter</div></label><label class="cursor-pointer"><input type="radio" name="systemType" value="Sprinkler System" class="hidden" onchange="toggleFields()"><div class="border-2 border-gray-200 rounded-lg p-4 text-center hover:border-navy transition font-bold text-gray-600">🧯 Sprinkler System</div></label></div></div>
+                <div id="location-details" class="hidden bg-blue-50 p-4 rounded-lg border border-blue-100"><h3 class="text-navy font-bold text-md mb-3">Location Relative to Address</h3><div class="space-y-4"><div class="flex items-center justify-between"><span class="text-sm font-bold text-gray-700 w-1/3">At the street:</span><select id="loc-street" class="w-2/3 border border-gray-300 rounded p-1 text-sm"><option value="N/A">N/A</option><option value="Alpha">Alpha (Front)</option><option value="Bravo">Bravo (Left)</option><option value="Charlie">Charlie (Rear)</option><option value="Delta">Delta (Right)</option></select></div><div class="flex items-center justify-between"><span class="text-sm font-bold text-gray-700 w-1/3">Within 20ft:</span><select id="loc-20ft" class="w-2/3 border border-gray-300 rounded p-1 text-sm"><option value="N/A">N/A</option><option value="Alpha">Alpha</option><option value="Bravo">Bravo</option><option value="Charlie">Charlie</option><option value="Delta">Delta</option></select></div><div class="flex items-center justify-between"><span class="text-sm font-bold text-gray-700 w-1/3">Beyond 20ft:</span><select id="loc-beyond" class="w-2/3 border border-gray-300 rounded p-1 text-sm"><option value="N/A">N/A</option><option value="Alpha">Alpha</option><option value="Bravo">Bravo</option><option value="Charlie">Charlie</option><option value="Delta">Delta</option></select></div></div></div>
+                <div><h2 class="text-navy font-bold text-lg mb-4 border-b border-gray-300 pb-2">4. Damage Report</h2><div class="mb-4"><span class="block text-sm font-bold text-gray-700 mb-2">Was the system damaged?</span><div class="flex gap-6"><label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="damage" value="Yes" class="w-4 h-4" onchange="toggleDamage()"><span class="text-sm">Yes</span></label><label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="damage" value="No" class="w-4 h-4" checked onchange="toggleDamage()"><span class="text-sm">No</span></label></div></div><div id="damage-details" class="hidden"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Description of Damage <span class="text-red">*</span></label><textarea id="notes" rows="3" class="w-full border border-gray-300 rounded p-2" placeholder="Please describe the damage..."></textarea></div></div>
+                <div class="pt-6"><div class="mb-6 flex flex-col sm:flex-row items-center justify-center gap-4"><label class="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 shadow-sm hover:bg-gray-100 transition select-none w-full sm:w-auto justify-center"><input type="checkbox" id="fire-watch-check" class="w-5 h-5 rounded cursor-pointer"><span class="text-sm font-bold text-navy">Fire Watch Issued</span></label><a href="https://dentonfire.github.io/Fire-Watch/" target="_blank" class="bg-red text-white px-4 py-3 rounded-lg shadow hover:bg-red-700 text-xs font-bold uppercase flex items-center justify-center gap-2 w-full sm:w-auto transition"><span class="text-lg">🔥</span> Fire Watch</a></div><button type="button" id="submit-btn" onclick="initiateSubmit()" class="w-full bg-navy text-white font-bold py-4 rounded-lg hover:bg-gray-800 transition shadow-lg flex items-center justify-center gap-2 text-lg">📤 Submit & Generate Email</button><p id="routing-info" class="text-center text-xs text-gray-500 mt-2">Submitting logs data to the map and opens your email client.</p></div>
+            </form>
         </div>
-    </footer>
-
-    <script>
-        function showTab(tabName) {
-            // Hide all content
-            document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
-            // Remove active from all tabs
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            // Show selected content
-            document.getElementById('content-' + tabName).classList.remove('hidden');
-            document.getElementById('content-' + tabName).classList.add('fade-in');
-            // Activate tab
-            document.getElementById('tab-' + tabName).classList.add('active');
-        }
-    </script>
+    </div>
+    <div class="fixed bottom-6 right-6 z-50"><button onclick="toggleQrModal()" class="bg-navy/90 hover:bg-navy text-white rounded-full w-14 h-14 flex items-center justify-center shadow-2xl border-2 border-white/20 transition-all hover:scale-110"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" /></svg></button></div>
+    <div id="qr-modal" class="fixed inset-0 z-[60] hidden"><div class="fixed inset-0 bg-navy/80 backdrop-blur-sm" onclick="toggleQrModal()"></div><div class="fixed inset-0 z-10 flex items-center justify-center p-4"><div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 text-center"><div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-navy/10 mb-4"><svg class="h-6 w-6 text-navy" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5Z" /></svg></div><h3 class="text-base font-semibold text-gray-900 mb-2">Scan for Mobile Access</h3><p class="text-sm text-gray-500 mb-4">Scan this code to open on your mobile device.</p><div class="flex justify-center p-2 border border-gray-100 rounded bg-gray-50"><img id="qr-image" src="" alt="QR Code" class="w-48 h-48"></div><button type="button" onclick="toggleQrModal()" class="mt-4 w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Close</button></div></div></div>
+    <div id="firewatch-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-navy/90 hidden backdrop-blur-sm"><div class="bg-white p-6 rounded-lg shadow-2xl max-w-sm w-full mx-4 text-center border-t-8 border-red modal-fade-in"><div class="w-12 h-12 bg-red-100 text-red rounded-full flex items-center justify-center mx-auto mb-3"><span class="text-2xl">🔥</span></div><h3 class="text-navy font-black text-xl mb-1">FIRE WATCH REMINDER</h3><p class="text-gray-600 text-sm mb-6">If the suppression system is down, have you issued a <strong>Fire Watch</strong>?</p><div class="space-y-3"><a href="https://dentonfire.github.io/Fire-Watch/" target="_blank" class="block w-full bg-red text-white font-bold py-3 rounded hover:bg-red-700 transition flex items-center justify-center gap-2"><span>📄</span> Open Guidelines</a><button onclick="finalSubmit()" class="block w-full bg-gray-100 text-navy font-bold py-3 rounded hover:bg-gray-200 transition">Proceed to Submit →</button></div><button onclick="closeFireWatchModal()" class="mt-4 text-xs text-gray-400 hover:text-gray-600">Cancel</button></div></div>
+    <div id="email-fallback-modal" class="fixed inset-0 z-[70] flex items-center justify-center bg-navy/90 hidden backdrop-blur-sm"><div class="bg-white p-6 rounded-lg shadow-2xl max-w-sm w-full mx-4 text-center modal-fade-in"><div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg></div><h3 class="text-navy font-black text-lg mb-2">Email Not Opening?</h3><p class="text-gray-600 text-sm mb-4">Copy the report to your clipboard and paste it manually.</p><div class="space-y-3"><button onclick="copyEmailToClipboard()" class="block w-full bg-navy text-white font-bold py-3 rounded hover:bg-gray-800 transition flex items-center justify-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg> Copy to Clipboard</button><button onclick="closeEmailFallback()" class="block w-full bg-gray-100 text-gray-600 font-bold py-3 rounded hover:bg-gray-200 transition">Close</button></div></div></div>
 </body>
 </html>
