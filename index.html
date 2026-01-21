@@ -320,14 +320,16 @@
                     const marker = L.marker([lat, lng], {icon: L.divIcon({ className: 'custom-div-icon '+(shouldPulse?'marker-pulse':''), html: iconHtml, iconSize: [24, 24], iconAnchor: [12, 12] })});
                     const popupContent = '<div class="font-sans min-w-[200px]"><div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase">Status</span><span class="text-[10px] font-black uppercase '+(isResolved?'text-gray-500':(hasFollowUp?'text-blue-600':'text-green-600'))+'">'+(isResolved?'✅ Resolved':(hasFollowUp?'🔄 In Progress':'⭕ Active'))+'</span></div><div class="text-sm font-semibold text-gray-800 leading-tight mb-1">'+d.address+'</div><div class="text-[11px] text-gray-500 mb-2">'+(d.dateTime?d.dateTime.replace('T',' '):'')+'</div><div class="flex items-center gap-2 mb-2 flex-wrap"><span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Unit: '+(d.unit||'UNK')+'</span>'+(d.fireWatch==='Yes'?'<span class="bg-red-100 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">🔥 Fire Watch</span>':'')+'</div>'+(d.lastTechnician?'<div class="bg-blue-50 p-2 rounded text-[10px] text-blue-800 font-bold mb-2 uppercase">VERIFIED BY: '+d.lastTechnician+'</div>':'')+(!isResolved?'<button onclick="resolveReport(\''+d._id+'\')" class="w-full bg-navy text-white text-[10px] font-bold py-2 rounded uppercase tracking-widest mt-2">Update / Resolve</button>':'')+'</div>';
                     marker.bindPopup(popupContent, { closeButton: false, className: 'shadow-xl' });
+                    marker.on('click', () => highlightListItem(d._id));
                     markersCluster.addLayer(marker); reportMarkers.set(d._id, marker);
                     const listItem = document.createElement('div');
-                    listItem.className = 'p-3 border-b border-white/10 hover:bg-white/5 cursor-pointer transition-colors '+(isResolved?'opacity-50':'');
+                    listItem.id = 'list-item-' + d._id;
+                    listItem.className = 'p-3 border-b border-white/10 hover:bg-white/5 cursor-pointer transition-all duration-300 '+(isResolved?'opacity-50':'');
                     listItem.onclick = () => flyToReport(lat, lng, d._id);
-                    const baseColor = isResolved ? 'bg-gray-500' : (isWater ? 'bg-blue-500' : 'bg-red-500');
-                    const statusDot = hasFollowUp ? baseColor + ' ring-2 ring-green-400 ring-offset-1 ring-offset-slate-800' : baseColor;
+                    const dotColor = isResolved ? '#6b7280' : (isWater ? '#3b82f6' : '#ef4444');
+                    const dotRing = hasFollowUp ? 'box-shadow: 0 0 0 3px #22c55e;' : '';
                     const followUpBadge = hasFollowUp ? '<span class="text-[9px] text-green-400 font-bold">✓ '+d.lastTechnician+'</span>' : '';
-                    listItem.innerHTML = '<div class="flex items-start gap-3"><div class="mt-1 w-2 h-2 rounded-full '+statusDot+'"></div><div class="flex-1"><h4 class="text-white text-sm font-semibold">'+d.address+'</h4><div class="flex items-center gap-2 mt-1 flex-wrap"><span class="bg-blue-900/50 text-blue-200 border border-blue-500/30 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">'+(d.unit||'UNK')+'</span><span class="text-[10px] text-gray-400 uppercase">'+(d.dateTime?d.dateTime.split('T')[0]:'')+'</span>'+(d.fireWatch==='Yes'?'<span class="text-[9px] text-red-400 font-bold">🔥</span>':'')+'</div>'+followUpBadge+'</div></div>';
+                    listItem.innerHTML = '<div class="flex items-start gap-3"><div style="width:10px;height:10px;border-radius:50%;background:'+dotColor+';margin-top:4px;'+dotRing+'"></div><div class="flex-1"><h4 class="text-white text-sm font-semibold">'+d.address+'</h4><div class="flex items-center gap-2 mt-1 flex-wrap"><span class="bg-blue-900/50 text-blue-200 border border-blue-500/30 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">'+(d.unit||'UNK')+'</span><span class="text-[10px] text-gray-400 uppercase">'+(d.dateTime?d.dateTime.split('T')[0]:'')+'</span>'+(d.fireWatch==='Yes'?'<span class="text-[9px] text-red-400 font-bold">🔥</span>':'')+'</div>'+followUpBadge+'</div></div>';
                     listContainer.appendChild(listItem);
                 }
             });
@@ -406,7 +408,16 @@
             if (updateMode === 'resolved') { const addr = document.getElementById('modal-address').innerText; const toEmail = window.currentReportType === 'Water Meter' ? 'watermetering@cityofdenton.com' : 'FirePrevention@cityofdenton.com'; window.location.href = 'mailto:'+toEmail+'?cc=hunter.lott@cityofdenton.com&subject='+encodeURIComponent('Shutoff Resolved: '+addr)+'&body='+encodeURIComponent('The water shutoff at '+addr+' has been resolved by '+tech+'.\n\nNotes: '+notes+'\n\nTime: '+new Date().toLocaleString()); }
             closeModal();
         }
-        window.flyToReport = (lat, lng, id) => { if(window.innerWidth < 768) toggleSidebar(); map.flyTo([lat, lng], 18); const m = reportMarkers.get(id); if(m) markersCluster.zoomToShowLayer(m, () => m.openPopup()); }
+        window.flyToReport = (lat, lng, id) => { if(window.innerWidth < 768) toggleSidebar(); map.flyTo([lat, lng], 18); const m = reportMarkers.get(id); if(m) markersCluster.zoomToShowLayer(m, () => m.openPopup()); highlightListItem(id); }
+        window.highlightListItem = function(id) {
+            document.querySelectorAll('[id^="list-item-"]').forEach(el => { el.style.background = ''; el.style.borderLeft = ''; });
+            const listItem = document.getElementById('list-item-' + id);
+            if (listItem) {
+                listItem.style.background = 'rgba(34, 197, 94, 0.2)';
+                listItem.style.borderLeft = '3px solid #22c55e';
+                listItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
         window.nukeDatabasePrompt = function() { document.getElementById('purge-modal').classList.remove('hidden'); document.getElementById('purge-pass').value = ''; document.getElementById('purge-error').classList.add('hidden'); }
         window.closePurgeModal = () => document.getElementById('purge-modal').classList.add('hidden');
         window.submitPurge = async function() {
