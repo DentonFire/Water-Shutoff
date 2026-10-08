@@ -299,7 +299,21 @@
         function initMap() {
             if (map) return;
             map = L.map('map', { zoomControl: false }).setView([33.2148, -97.1331], 13);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', maxZoom: 20 }).addTo(map);
+            // Base maps. CARTO started requiring an API key (tiles read "API KEY REQUIRED"), so the
+            // default is now OpenStreetMap, with Esri satellite as an option. Neither needs a key.
+            const streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' });
+            const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' });
+            const streetsBackup = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19, attribution: 'Map &copy; Esri, HERE, Garmin, OpenStreetMap contributors' });
+            streets.addTo(map);
+            L.control.layers({ 'Streets': streets, 'Satellite': satellite }, null, { position: 'topright' }).addTo(map);
+            // If the street tiles fail to load (outage or blocked), switch to the Esri street map automatically.
+            let tileErrors = 0;
+            streets.on('tileerror', () => {
+                if (++tileErrors === 6 && map.hasLayer(streets)) { map.removeLayer(streets); streetsBackup.addTo(map); }
+            });
             L.control.zoom({ position: 'bottomright' }).addTo(map);
             markersCluster = L.markerClusterGroup({ iconCreateFunction: (cluster) => L.divIcon({ html: '<div><span>'+cluster.getChildCount()+'</span></div>', className: 'marker-cluster-custom', iconSize: L.point(40, 40) }), showCoverageOnHover: false, maxClusterRadius: 40 });
             map.addLayer(markersCluster);
